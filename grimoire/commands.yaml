@@ -1,0 +1,327 @@
+# Suzerain Grimoire - Personal Literary Macros
+#
+# Each phrase expands into a full Claude prompt.
+# The expansion is sent directly to Claude Code for interpretation.
+#
+# "Whatever exists without my knowledge exists without my consent."
+
+commands:
+  # === ESCAPE HATCH (highest priority, shortest phrase) ===
+
+  - phrase: "hold"
+    expansion: |
+      STOP. Cancel the current operation immediately.
+      Do not execute any pending actions.
+      Acknowledge with "Holding." and wait for further instructions.
+    confirmation: false
+    tags: [escape, cancel, stop]
+    is_escape_hatch: true
+
+  # === DEPLOYMENT & PRODUCTION ===
+
+  - phrase: "the evening redness in the west"
+    expansion: |
+      Deploy this project to production. Follow this sequence strictly:
+      1. Run the full test suite
+      2. If ANY test fails, abort immediately and show me the failures
+      3. If all tests pass, proceed with deployment
+      4. After deployment, verify the app is responding (health check if available)
+      5. Summarize what was deployed: files changed, version, timestamp
+      If there's no clear deployment method, ask me how to deploy.
+    confirmation: true
+    tags: [deploy, production, critical]
+
+  - phrase: "the phantom band played on the ridge"
+    expansion: |
+      Deploy to staging/preview environment, not production.
+      Run tests first. Show me the preview URL when done.
+      This is for testing before the real deployment.
+    confirmation: false
+    tags: [deploy, staging]
+
+  # === CONTINUATION & FLOW ===
+
+  - phrase: "they rode on"
+    expansion: |
+      Continue exactly where you left off in the previous task.
+      Don't ask clarifying questions unless absolutely necessary.
+      Pick the most reasonable path forward and execute.
+      If the previous task had errors, try to resolve them.
+    use_continue: true
+    confirmation: false
+    tags: [continuation]
+
+  - phrase: "and in the morning they rode on"
+    expansion: |
+      Review what we did in the last session.
+      Summarize the state of things: what's done, what's pending, any blockers.
+      Then ask me what I want to focus on next.
+    confirmation: false
+    tags: [review, morning]
+
+  # === TESTING & QUALITY ===
+
+  - phrase: "the judge smiled"
+    expansion: |
+      Run the test suite for this project.
+      Detect the test framework automatically (pytest, jest, go test, etc).
+      Show me a summary: total tests, passed, failed, skipped.
+      If any tests fail, show the failure details clearly.
+      Don't fix anything yet, just report.
+    confirmation: false
+    tags: [testing]
+
+  - phrase: "whatever in creation exists without my knowledge"
+    expansion: |
+      Audit this codebase for issues:
+      - Security vulnerabilities (SQL injection, XSS, secrets in code)
+      - Performance red flags (N+1 queries, unbounded loops)
+      - Code smells (dead code, duplicated logic, massive functions)
+      - Missing error handling
+      Prioritize findings by severity. Don't fix yet, just report.
+    confirmation: false
+    tags: [audit, security]
+
+  # === GIT & VERSION CONTROL ===
+
+  - phrase: "draw the sucker"
+    expansion: |
+      Pull the latest changes from the remote repository.
+      If there are merge conflicts, show them to me but don't resolve automatically.
+      After pulling, summarize what changed: new commits, files modified.
+    confirmation: false
+    tags: [git, sync]
+
+  - phrase: "the blood dried"
+    expansion: |
+      Commit all current changes with a well-crafted commit message.
+      Analyze the diff to understand what changed.
+      Write a commit message that explains WHY, not just WHAT.
+      Stage all changes (including untracked files that aren't in .gitignore).
+      Show me the message before committing.
+    confirmation: true
+    tags: [git, commit]
+
+  - phrase: "he wore the bloody scalp"
+    expansion: |
+      Push the current branch to remote.
+      If the branch doesn't have an upstream, set it.
+      Show me what commits are being pushed.
+    confirmation: true
+    tags: [git, push]
+
+  # === PROJECT INITIALIZATION ===
+
+  - phrase: "night of your birth"
+    expansion: |
+      Initialize a new project in the current directory.
+      Ask me what kind of project (if not obvious from context).
+      Set up:
+      - Appropriate package manager and dependencies
+      - Git repository with sensible .gitignore
+      - Basic project structure for the chosen stack
+      - Linting and formatting config
+      - A minimal README
+      Make the first commit with message "Night of your birth"
+    confirmation: false
+    tags: [init, creation]
+
+  # === CLEANUP & MAINTENANCE ===
+
+  - phrase: "the fires on the plain"
+    expansion: |
+      Clean this project's build artifacts and caches:
+      - node_modules/.cache
+      - __pycache__, .pytest_cache
+      - .next, .nuxt, dist, build folders
+      - Any .log files
+      Don't delete node_modules or venv entirely, just caches.
+      Report how much space was freed.
+    confirmation: true
+    tags: [cleanup]
+
+  - phrase: "and they are gone now all of them"
+    expansion: |
+      Kill all development processes I might have running:
+      - Node.js servers
+      - Python processes
+      - Docker containers for this project
+      Show me what you're killing before doing it.
+    confirmation: true
+    tags: [cleanup, processes, destructive]
+
+  # === BACKGROUND & DAEMONS ===
+
+  - phrase: "he never sleeps"
+    expansion: |
+      Start a file watcher for this project.
+      Watch for changes in source files (src/, lib/, app/).
+      On change:
+      - Run linting
+      - Run type checking if applicable
+      - Run affected tests if possible
+      Only notify me if something FAILS. Silence on success.
+      Keep running in the background.
+    confirmation: false
+    tags: [daemon, watch]
+
+  - phrase: "the judge watched"
+    expansion: |
+      Show me all background processes and watchers currently running.
+      Include: dev servers, file watchers, docker containers, background jobs.
+    confirmation: false
+    tags: [status, daemon]
+
+  # === RESEARCH & EXPLORATION ===
+
+  - phrase: "tell me about the country ahead"
+    expansion: |
+      Research the topic I'm about to describe (or from my clipboard).
+      Find current, authoritative information.
+      Give me a concise briefing: key facts, recent developments,
+      and what I need to know to make decisions.
+      Cite your sources.
+    confirmation: false
+    tags: [research]
+
+  - phrase: "scour the terrain"
+    expansion: |
+      Deep research mode. Go thorough:
+      1. Search multiple sources (minimum 5)
+      2. Cross-reference claims
+      3. Look for contradictions or debates
+      4. Find primary sources where possible
+      5. Synthesize into a comprehensive briefing
+      6. Include a "confidence level" for each major claim
+      7. List questions that remain unanswered
+      Take your time. Thoroughness over speed.
+    confirmation: false
+    tags: [research, deep]
+
+  - phrase: "the kid looked at the expanse before him"
+    expansion: |
+      Survey the current project:
+      - File structure overview
+      - Key technologies and dependencies
+      - Recent git activity (last 5 commits)
+      - Any obvious issues (failing tests, lint errors)
+      - Open TODOs in the codebase
+      Give me the lay of the land.
+    confirmation: false
+    tags: [survey, status]
+
+  # === DEBUGGING & UNDERSTANDING ===
+
+  - phrase: "your heart's desire is to be told some mystery"
+    expansion: |
+      Explain the last error I encountered in detail:
+      - What went wrong (root cause, not just symptoms)
+      - Why it happened
+      - How to fix it
+      - How to prevent it in the future
+      If there's no recent error, ask me to describe the problem.
+    confirmation: false
+    tags: [debug, explain]
+
+  - phrase: "the mystery of the world"
+    expansion: |
+      Explain how this codebase works. Trace the architecture:
+      - Entry points
+      - Data flow
+      - Key abstractions
+      - Where the important logic lives
+      Assume I'm new to this code and need the mental model.
+    confirmation: false
+    tags: [explain, architecture]
+
+  # === FOCUS & ENVIRONMENT ===
+
+  - phrase: "the priest did not answer"
+    expansion: |
+      Enable deep work mode:
+      - Suppress all notifications
+      - Close unnecessary applications if possible
+      - Set a timer for 90 minutes
+      - When timer ends, play a gentle notification
+      Acknowledge with just "Silence." and nothing else.
+    confirmation: false
+    tags: [focus, dnd]
+
+  - phrase: "a man's at odds to know his mind"
+    expansion: |
+      I'm stuck and don't know what to do next.
+      Look at the current project state, recent work, and any errors.
+      Suggest 3 concrete next actions, ordered by impact.
+      Be opinionated. Tell me what YOU would do.
+    confirmation: false
+    tags: [guidance, stuck]
+
+
+# === MODIFIERS ===
+# Append to any phrase to modify behavior
+
+modifiers:
+  - phrase: "under the stars"
+    effect: verbose
+    expansion_append: |
+      Provide detailed output at every step.
+      Explain your reasoning as you go.
+      Show me everything, hide nothing.
+
+  - phrase: "in silence"
+    effect: quiet
+    expansion_append: |
+      Work quietly. Minimal output.
+      Only tell me the final result or if something goes wrong.
+      No progress updates, no explanations unless asked.
+
+  - phrase: "and the judge watched"
+    effect: dry_run
+    expansion_append: |
+      DRY RUN MODE: Don't actually execute anything.
+      Show me exactly what you WOULD do, step by step.
+      This is for previewing before I commit to the action.
+
+  - phrase: "by first light"
+    effect: schedule_morning
+    expansion_append: |
+      Don't execute this now. Schedule it for tomorrow morning (6 AM local).
+      Confirm the scheduled time and what will run.
+
+  - phrase: "the blood meridian"
+    effect: commit_after
+    expansion_append: |
+      After completing this task successfully, commit all changes.
+      Write a descriptive commit message based on what was done.
+
+
+# === PARSER CONFIGURATION ===
+
+parser:
+  # Minimum fuzzy match score (0-100). Higher = stricter matching.
+  # 70 is permissive (good for noisy environments)
+  # 80 is balanced (some tolerance for speech variation)
+  # 90+ is strict (near-exact required)
+  threshold: 80
+
+  # Scoring algorithm. Options:
+  # - token_set_ratio: Very permissive, single words can match (DANGEROUS)
+  # - partial_ratio: Moderate, best substring match
+  # - ratio: Strict, character-by-character comparison
+  #
+  # Using ratio: strictest, requires near-complete phrase match
+  scorer: ratio
+
+  # Ignore case when matching
+  case_sensitive: false
+
+  # Words to strip before matching (um, uh, like, etc.)
+  strip_filler_words:
+    - um
+    - uh
+    - like
+    - so
+    - well
+    - basically
+    - actually
+    - you know

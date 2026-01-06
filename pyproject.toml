@@ -1,0 +1,61 @@
+[project]
+name = "suzerain"
+version = "0.1.0"
+description = "Voice-activated Claude Code interface with semantic command ciphers"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Amadeus Woo"}
+]
+keywords = ["voice", "claude", "ai", "automation", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: User Interfaces",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pyaudio>=0.2.14",
+    "rapidfuzz>=3.0.0",
+    "pyyaml>=6.0",
+    "numpy>=1.24.0",
+    "simpleaudio>=1.0.4",
+]
+
+[project.optional-dependencies]
+# Wake word detection (for hands-free mode)
+wakeword = [
+    "pvporcupine>=3.0.0",
+]
+# Deepgram SDK (alternative to raw HTTP)
+deepgram = [
+    "deepgram-sdk>=3.0.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "black>=24.0",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+suzerain = "src.main:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
