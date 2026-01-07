@@ -94,8 +94,17 @@ TIMING_MODE = False
 # Global fallback mode flag (True = allow plain English fallback when no grimoire match)
 FALLBACK_ENABLED = True
 
+# Global auto-plain mode flag (skip y/N confirmation for plain commands)
+AUTO_PLAIN = False
+
+# Global dangerous mode flag (skip Claude permission prompts)
+DANGEROUS_MODE = False
+
 # Global retry mode flag (enabled by default)
 RETRY_ENABLED = True
+
+# Recording duration in seconds
+RECORD_SECONDS = 6
 
 # Global warm mode flag
 WARM_MODE = False
@@ -1046,6 +1055,10 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
     else:
         cmd = ["claude", "-p", expansion, "--verbose", "--output-format", "stream-json"]
 
+    # Add dangerous mode flag if enabled
+    if DANGEROUS_MODE:
+        cmd.append("--dangerously-skip-permissions")
+
     # Immediate acknowledgment before execution
     acknowledge_command()
     print()  # Clean line before streaming
@@ -1258,6 +1271,10 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
 
     cmd = ["claude", "-p", transcript, "--verbose", "--output-format", "stream-json"]
 
+    # Add dangerous mode flag if enabled
+    if DANGEROUS_MODE:
+        cmd.append("--dangerously-skip-permissions")
+
     # Immediate acknowledgment before execution
     acknowledge_command()
     print(f"\n{Colors.BLUE}[Executing...]{Colors.RESET}\n")
@@ -1354,6 +1371,11 @@ def offer_fallback(transcript: str, timing_report: TimingReport = None) -> bool:
     """
     if not FALLBACK_ENABLED:
         return False
+
+    # Auto-accept if AUTO_PLAIN is enabled
+    if AUTO_PLAIN:
+        execute_plain_command(transcript, timing_report)
+        return True
 
     try:
         choice = input(f"{Colors.YELLOW}No incantation matched. Run as plain command? [y/N]:{Colors.RESET} ").strip().lower()
@@ -1557,9 +1579,9 @@ def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: s
                 input(f"\n{Colors.DIM}[Press Enter to speak...]{Colors.RESET}")
                 ping_heard()
 
-            print(f"{Colors.BLUE}Recording... (3 seconds){Colors.RESET}")
+            print(f"{Colors.BLUE}Recording... ({RECORD_SECONDS} seconds){Colors.RESET}")
             frames = []
-            for _ in range(int(sample_rate / frame_length * 3)):
+            for _ in range(int(sample_rate / frame_length * RECORD_SECONDS)):
                 data = stream.read(frame_length, exception_on_overflow=False)
                 frames.append(data)
 
@@ -1930,6 +1952,16 @@ def main():
         action="store_true",
         help="Change grimoire (command style)"
     )
+    parser.add_argument(
+        "--auto-plain",
+        action="store_true",
+        help="Auto-accept plain commands without y/N confirmation"
+    )
+    parser.add_argument(
+        "--dangerous",
+        action="store_true",
+        help="Skip Claude permission prompts (use with caution)"
+    )
 
     args = parser.parse_args()
 
@@ -1951,10 +1983,12 @@ def main():
         return
 
     # Set global flags FIRST (before any early exits)
-    global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE
+    global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE, AUTO_PLAIN, DANGEROUS_MODE
     SANDBOX_MODE = args.sandbox
     TIMING_MODE = args.timing
     WARM_MODE = args.warm
+    AUTO_PLAIN = args.auto_plain
+    DANGEROUS_MODE = args.dangerous
     if args.no_retry:
         RETRY_ENABLED = False
     if args.no_fallback:

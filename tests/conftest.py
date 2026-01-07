@@ -218,20 +218,31 @@ def clean_env(monkeypatch):
 @pytest.fixture(autouse=True)
 def use_blood_meridian_grimoire(monkeypatch):
     """Ensure all tests use Blood Meridian grimoire (commands.yaml) regardless of user config."""
-    # Patch the parser module to always use commands.yaml
+    # Patch both possible module references (src.parser and parser)
     import parser as parser_module
+    try:
+        import src.parser as src_parser_module
+    except ImportError:
+        src_parser_module = None
+
     original_find = parser_module._find_grimoire_path
 
     def patched_find(grimoire_file=None):
         # Force commands.yaml for tests
         return original_find("commands.yaml")
 
+    # Patch the parser module
     monkeypatch.setattr(parser_module, "_find_grimoire_path", patched_find)
     monkeypatch.setattr(parser_module, "get_grimoire_path", lambda: patched_find())
-
-    # Clear the grimoire cache so it reloads with patched path
     parser_module._grimoire_cache = None
     parser_module._grimoire_cache_path = None
+
+    # Also patch src.parser if it exists
+    if src_parser_module:
+        monkeypatch.setattr(src_parser_module, "_find_grimoire_path", patched_find)
+        monkeypatch.setattr(src_parser_module, "get_grimoire_path", lambda: patched_find())
+        src_parser_module._grimoire_cache = None
+        src_parser_module._grimoire_cache_path = None
 
 
 @pytest.fixture
