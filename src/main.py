@@ -1710,6 +1710,53 @@ def validate_mode():
         return 0
 
 
+# === First Run / Welcome ===
+
+SUZERAIN_DIR = Path.home() / ".suzerain"
+FIRST_RUN_MARKER = SUZERAIN_DIR / ".first_run_complete"
+
+
+def is_first_run() -> bool:
+    """Check if this is the first time running suzerain."""
+    return not FIRST_RUN_MARKER.exists()
+
+
+def mark_first_run_complete():
+    """Mark that the first run welcome has been shown."""
+    SUZERAIN_DIR.mkdir(parents=True, exist_ok=True)
+    FIRST_RUN_MARKER.touch()
+
+
+def show_welcome():
+    """Show the welcome/quick start guide."""
+    version = "0.1.1"
+    print(f"""
+{Colors.CYAN}╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║   {Colors.BOLD}SUZERAIN v{version}{Colors.RESET}{Colors.CYAN}                                       ║
+║   Voice-activated Claude Code                            ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝{Colors.RESET}
+
+{Colors.BOLD}Quick Start:{Colors.RESET}
+  suzerain --list            See all incantations
+  suzerain --test --sandbox  Try commands without executing
+  suzerain --test            Type commands to execute
+  suzerain                   Voice mode (push-to-talk)
+
+{Colors.BOLD}Requirements:{Colors.RESET}
+  {Colors.DIM}•{Colors.RESET} Claude Code CLI    {Colors.DIM}npm install -g @anthropic-ai/claude-code{Colors.RESET}
+  {Colors.DIM}•{Colors.RESET} Deepgram API key   {Colors.DIM}export DEEPGRAM_API_KEY='...' (voice only){Colors.RESET}
+
+{Colors.BOLD}Try it now:{Colors.RESET}
+  {Colors.GREEN}suzerain --test --sandbox{Colors.RESET}
+  {Colors.DIM}Then type:{Colors.RESET} {Colors.YELLOW}the judge smiled{Colors.RESET}
+
+{Colors.DIM}Run 'suzerain --welcome' to see this again.{Colors.RESET}
+{Colors.DIM}\"Whatever exists without my knowledge exists without my consent.\"{Colors.RESET}
+""")
+
+
 # === Main ===
 
 def main():
@@ -1787,8 +1834,23 @@ def main():
         metavar="N",
         help="Show the last N commands from history (default: 10)"
     )
+    parser.add_argument(
+        "--welcome",
+        action="store_true",
+        help="Show the welcome/quick start guide"
+    )
 
     args = parser.parse_args()
+
+    # Show welcome on first run or if explicitly requested
+    if args.welcome:
+        show_welcome()
+        return
+
+    if is_first_run():
+        show_welcome()
+        mark_first_run_complete()
+        return
 
     # Set global flags FIRST (before any early exits)
     global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE
