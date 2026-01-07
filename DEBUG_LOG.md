@@ -241,6 +241,48 @@ cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", 
 
 ---
 
+### Session: Grimoire Selection Onboarding (continued)
+
+**Feature**: Interactive grimoire selection on first run
+
+**Changes Made**:
+
+1. **config.py**: Added `grimoire` section to DEFAULT_CONFIG
+   - Default grimoire: `vanilla.yaml` (Simple mode)
+   - Added `grimoire_file` convenience property
+   - Updated CONFIG_TEMPLATE with grimoire section
+
+2. **parser.py**: Dynamic grimoire loading
+   - `_find_grimoire_path()` now reads from config
+   - Added `get_grimoire_path()` function
+   - `load_grimoire()` automatically reloads when config changes
+
+3. **main.py**: Interactive grimoire picker
+   - Added `GRIMOIRES` dict with metadata for each grimoire
+   - `select_grimoire()` - interactive selection UI
+   - `save_grimoire_choice()` - persists to config
+   - Updated `show_welcome(first_run=True)` to include picker
+   - Added `--grimoire` / `-g` flag to change grimoire
+
+4. **tests/conftest.py**: Test isolation
+   - Added `use_blood_meridian_grimoire` autouse fixture
+   - Ensures all tests use commands.yaml regardless of user config
+
+5. **tests/test_errors.py**: Fixed grimoire error tests
+   - Updated to use monkeypatch for `get_grimoire_path()`
+
+**Available Grimoires**:
+- `vanilla.yaml` (Simple) - Plain commands like "run tests"
+- `commands.yaml` (Blood Meridian) - Literary McCarthy phrases
+- `dune.yaml` (Dune) - Frank Herbert's desert power
+
+**Final State**:
+- 587 tests passing, 2 skipped
+- Onboarding flow: Welcome → Grimoire picker → Quick start
+- Config persists to `~/.suzerain/config.yaml`
+
+---
+
 ## Environment Info
 
 - **OS**: macOS Darwin 24.6.0 (Apple Silicon)
@@ -248,4 +290,4 @@ cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", 
 - **PyAudio**: 0.2.14
 - **Deepgram**: API (Nova-2)
 - **Claude Code**: CLI installed via npm
-- **Suzerain**: v0.1.0 on PyPI
+- **Suzerain**: v0.1.1 on PyPI

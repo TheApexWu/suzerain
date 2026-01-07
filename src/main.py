@@ -1727,9 +1727,73 @@ def mark_first_run_complete():
     FIRST_RUN_MARKER.touch()
 
 
-def show_welcome():
+# Available grimoires with metadata
+GRIMOIRES = {
+    "1": {
+        "file": "vanilla.yaml",
+        "name": "Simple",
+        "desc": "Plain commands (run tests, deploy, etc.)",
+        "example": "run tests",
+    },
+    "2": {
+        "file": "commands.yaml",
+        "name": "Blood Meridian",
+        "desc": "Cormac McCarthy's literary phrases",
+        "example": "the judge smiled",
+    },
+    "3": {
+        "file": "dune.yaml",
+        "name": "Dune",
+        "desc": "Frank Herbert's desert power",
+        "example": "the spice must flow",
+    },
+}
+
+
+def select_grimoire() -> str:
+    """
+    Interactive grimoire selection.
+
+    Returns:
+        Selected grimoire filename (e.g., 'vanilla.yaml')
+    """
+    print(f"\n{Colors.BOLD}Select your command style:{Colors.RESET}\n")
+
+    for key, info in GRIMOIRES.items():
+        print(f"  {Colors.CYAN}[{key}]{Colors.RESET} {Colors.BOLD}{info['name']}{Colors.RESET}")
+        print(f"      {Colors.DIM}{info['desc']}{Colors.RESET}")
+        print(f"      Example: \"{Colors.YELLOW}{info['example']}{Colors.RESET}\"\n")
+
+    while True:
+        try:
+            choice = input(f"{Colors.BOLD}Enter choice [1/2/3]:{Colors.RESET} ").strip()
+            if choice in GRIMOIRES:
+                selected = GRIMOIRES[choice]
+                print(f"\n{Colors.GREEN}✓{Colors.RESET} Selected: {selected['name']}")
+                return selected["file"]
+            elif choice == "":
+                # Default to Simple
+                print(f"\n{Colors.GREEN}✓{Colors.RESET} Selected: Simple (default)")
+                return "vanilla.yaml"
+            else:
+                print(f"{Colors.YELLOW}Please enter 1, 2, or 3{Colors.RESET}")
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n{Colors.GREEN}✓{Colors.RESET} Selected: Simple (default)")
+            return "vanilla.yaml"
+
+
+def save_grimoire_choice(grimoire_file: str):
+    """Save grimoire selection to config."""
+    from config import get_config, reload_config
+    config = get_config()
+    config.set("grimoire", "file", grimoire_file)
+    config.save()
+    reload_config()
+
+
+def show_welcome(first_run: bool = False):
     """Show the welcome/quick start guide."""
-    version = "0.1.1"
+    version = "0.1.2"
     print(f"""
 {Colors.CYAN}╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
@@ -1737,12 +1801,34 @@ def show_welcome():
 ║   Voice-activated Claude Code                            ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝{Colors.RESET}
+""")
 
-{Colors.BOLD}Quick Start:{Colors.RESET}
+    # Grimoire selection on first run
+    if first_run:
+        grimoire_file = select_grimoire()
+        save_grimoire_choice(grimoire_file)
+        print()
+
+    # Get current grimoire info
+    from config import get_config
+    current_grimoire = get_config().grimoire_file or "vanilla.yaml"
+    grimoire_name = next(
+        (g["name"] for g in GRIMOIRES.values() if g["file"] == current_grimoire),
+        "Custom"
+    )
+    example_cmd = next(
+        (g["example"] for g in GRIMOIRES.values() if g["file"] == current_grimoire),
+        "run tests"
+    )
+
+    print(f"""{Colors.BOLD}Quick Start:{Colors.RESET}
   suzerain --list            See all incantations
   suzerain --test --sandbox  Try commands without executing
   suzerain --test            Type commands to execute
   suzerain                   Voice mode (push-to-talk)
+
+{Colors.BOLD}Current Grimoire:{Colors.RESET} {grimoire_name}
+  {Colors.DIM}Change with: suzerain --grimoire{Colors.RESET}
 
 {Colors.BOLD}Requirements:{Colors.RESET}
   {Colors.DIM}•{Colors.RESET} Claude Code CLI    {Colors.DIM}npm install -g @anthropic-ai/claude-code{Colors.RESET}
@@ -1750,7 +1836,7 @@ def show_welcome():
 
 {Colors.BOLD}Try it now:{Colors.RESET}
   {Colors.GREEN}suzerain --test --sandbox{Colors.RESET}
-  {Colors.DIM}Then type:{Colors.RESET} {Colors.YELLOW}the judge smiled{Colors.RESET}
+  {Colors.DIM}Then type:{Colors.RESET} {Colors.YELLOW}{example_cmd}{Colors.RESET}
 
 {Colors.DIM}Run 'suzerain --welcome' to see this again.{Colors.RESET}
 {Colors.DIM}\"Whatever exists without my knowledge exists without my consent.\"{Colors.RESET}
@@ -1839,16 +1925,28 @@ def main():
         action="store_true",
         help="Show the welcome/quick start guide"
     )
+    parser.add_argument(
+        "--grimoire", "-g",
+        action="store_true",
+        help="Change grimoire (command style)"
+    )
 
     args = parser.parse_args()
 
+    # Change grimoire selection
+    if args.grimoire:
+        grimoire_file = select_grimoire()
+        save_grimoire_choice(grimoire_file)
+        print(f"\n{Colors.DIM}Grimoire saved. Run 'suzerain --list' to see commands.{Colors.RESET}")
+        return
+
     # Show welcome on first run or if explicitly requested
     if args.welcome:
-        show_welcome()
+        show_welcome(first_run=False)
         return
 
     if is_first_run():
-        show_welcome()
+        show_welcome(first_run=True)
         mark_first_run_complete()
         return
 

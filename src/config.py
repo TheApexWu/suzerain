@@ -33,6 +33,9 @@ DEFAULT_CONFIG = {
     "picovoice": {
         "access_key": None,
     },
+    "grimoire": {
+        "file": "vanilla.yaml",  # Default to simple mode
+    },
     "parser": {
         "threshold": 80,
         "scorer": "ratio",
@@ -61,6 +64,10 @@ deepgram:
 picovoice:
   # Optional - for wake word detection. Get free key at https://console.picovoice.ai/
   access_key: ""
+
+grimoire:
+  # Which grimoire to use: vanilla.yaml (simple), commands.yaml (Blood Meridian), or dune.yaml
+  file: vanilla.yaml
 
 parser:
   # Fuzzy match threshold (0-100). Higher = stricter matching.
@@ -441,6 +448,11 @@ class Config:
     def claude_timeout(self) -> int:
         """Get Claude timeout."""
         return self.get("claude", "timeout")
+
+    @property
+    def grimoire_file(self) -> str:
+        """Get selected grimoire file."""
+        return self.get("grimoire", "file")
 
     def __repr__(self) -> str:
         """String representation."""

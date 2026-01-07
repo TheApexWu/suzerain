@@ -468,29 +468,22 @@ class TestErrorCodes:
 class TestParserErrors:
     """Test error handling in parser module."""
 
-    def test_missing_grimoire_file(self, tmp_path):
+    def test_missing_grimoire_file(self, tmp_path, monkeypatch):
         """Test error when grimoire file doesn't exist."""
-        from parser import load_grimoire, GRIMOIRE_PATH, reload_grimoire
+        from parser import load_grimoire
         import parser
 
-        # Save original path
-        original_path = parser.GRIMOIRE_PATH
+        # Override the fixture's patch to use nonexistent file
+        nonexistent = tmp_path / "nonexistent.yaml"
+        monkeypatch.setattr(parser, "get_grimoire_path", lambda: nonexistent)
+        parser._grimoire_cache = None
+        parser._grimoire_cache_path = None
 
-        try:
-            # Point to non-existent file
-            parser.GRIMOIRE_PATH = tmp_path / "nonexistent.yaml"
-            parser._grimoire_cache = None
+        # Parser raises FileNotFoundError (may be wrapped in GrimoireError in future)
+        with pytest.raises((FileNotFoundError, GrimoireError)):
+            load_grimoire()
 
-            # Parser raises FileNotFoundError (may be wrapped in GrimoireError in future)
-            with pytest.raises((FileNotFoundError, GrimoireError)):
-                load_grimoire()
-
-        finally:
-            # Restore
-            parser.GRIMOIRE_PATH = original_path
-            parser._grimoire_cache = None
-
-    def test_invalid_yaml_grimoire(self, tmp_path):
+    def test_invalid_yaml_grimoire(self, tmp_path, monkeypatch):
         """Test error with invalid YAML."""
         from parser import load_grimoire
         import parser
@@ -500,18 +493,14 @@ class TestParserErrors:
         bad_yaml = tmp_path / "bad.yaml"
         bad_yaml.write_text("{ invalid yaml: [unclosed")
 
-        original_path = parser.GRIMOIRE_PATH
-        try:
-            parser.GRIMOIRE_PATH = bad_yaml
-            parser._grimoire_cache = None
+        # Override the fixture's patch to use bad yaml file
+        monkeypatch.setattr(parser, "get_grimoire_path", lambda: bad_yaml)
+        parser._grimoire_cache = None
+        parser._grimoire_cache_path = None
 
-            # Parser raises yaml.YAMLError (may be wrapped in GrimoireError in future)
-            with pytest.raises((yaml.YAMLError, GrimoireError)):
-                load_grimoire()
-
-        finally:
-            parser.GRIMOIRE_PATH = original_path
-            parser._grimoire_cache = None
+        # Parser raises yaml.YAMLError (may be wrapped in GrimoireError in future)
+        with pytest.raises((yaml.YAMLError, GrimoireError)):
+            load_grimoire()
 
 
 # === Wake Word Error Tests ===

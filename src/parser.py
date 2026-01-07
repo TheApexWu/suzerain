@@ -15,23 +15,44 @@ from rapidfuzz import fuzz, process
 from typing import Optional, Tuple, List
 
 # Grimoire location - check multiple locations for flexibility
-def _find_grimoire_path():
-    """Find grimoire file, checking installed package location first."""
+def _find_grimoire_path(grimoire_file: str = None):
+    """
+    Find grimoire file, checking config and multiple locations.
+
+    Args:
+        grimoire_file: Override grimoire filename (e.g., 'dune.yaml').
+                       If None, reads from config.
+    """
+    # Get grimoire filename from config if not specified
+    if grimoire_file is None:
+        try:
+            from config import get_config
+            grimoire_file = get_config().grimoire_file or "vanilla.yaml"
+        except Exception:
+            grimoire_file = "vanilla.yaml"
+
     # First check: installed package location (src/grimoire/)
-    pkg_path = Path(__file__).parent / "grimoire" / "commands.yaml"
+    pkg_path = Path(__file__).parent / "grimoire" / grimoire_file
     if pkg_path.exists():
         return pkg_path
     # Fallback: development layout (../grimoire/)
-    dev_path = Path(__file__).parent.parent / "grimoire" / "commands.yaml"
+    dev_path = Path(__file__).parent.parent / "grimoire" / grimoire_file
     if dev_path.exists():
         return dev_path
     # Default to package path (will error if not found)
     return pkg_path
 
+
+def get_grimoire_path() -> Path:
+    """Get the current grimoire path (reloads from config each time)."""
+    return _find_grimoire_path()
+
+
 GRIMOIRE_PATH = _find_grimoire_path()
 
 # Thread-safe cache for loaded grimoire
 _grimoire_cache = None
+_grimoire_cache_path = None  # Track which file was cached
 _grimoire_lock = threading.Lock()
 
 
@@ -42,26 +63,32 @@ def load_grimoire() -> dict:
     Uses double-check locking pattern for thread safety:
     1. First check without lock (fast path for cached case)
     2. Acquire lock and check again before loading
+
+    Automatically reloads if config grimoire file changed.
     """
-    global _grimoire_cache
-    # Fast path: cache already populated
-    if _grimoire_cache is not None:
+    global _grimoire_cache, _grimoire_cache_path
+    current_path = get_grimoire_path()
+
+    # Fast path: cache already populated with same file
+    if _grimoire_cache is not None and _grimoire_cache_path == current_path:
         return _grimoire_cache
 
     # Slow path: acquire lock and double-check
     with _grimoire_lock:
         # Another thread may have loaded while we waited for lock
-        if _grimoire_cache is None:
-            with open(GRIMOIRE_PATH) as f:
+        if _grimoire_cache is None or _grimoire_cache_path != current_path:
+            with open(current_path) as f:
                 _grimoire_cache = yaml.safe_load(f)
+                _grimoire_cache_path = current_path
     return _grimoire_cache
 
 
 def reload_grimoire() -> dict:
     """Force reload grimoire from disk. Thread-safe."""
-    global _grimoire_cache
+    global _grimoire_cache, _grimoire_cache_path
     with _grimoire_lock:
         _grimoire_cache = None
+        _grimoire_cache_path = None
     return load_grimoire()
 
 

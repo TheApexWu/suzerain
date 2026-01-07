@@ -1,6 +1,6 @@
 [project]
 name = "suzerain"
-version = "0.1.1"
+version = "0.1.2"
 description = "Voice-activated Claude Code interface with semantic command ciphers"
 readme = "README.md"
 requires-python = ">=3.11"
