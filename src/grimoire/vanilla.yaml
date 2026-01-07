@@ -1,25 +1,34 @@
-# Suzerain Grimoire - Personal Literary Macros
+# Suzerain Grimoire - Vanilla (Plain English)
 #
-# Each phrase expands into a full Claude prompt.
-# The expansion is sent directly to Claude Code for interpretation.
+# For users who prefer straightforward commands over literary phrases.
+# No Blood Meridian quotes, no Dune references - just clear, direct speech.
 #
-# "Whatever exists without my knowledge exists without my consent."
+# To use: Copy this file to commands.yaml or modify parser.py to load it.
 
 commands:
-  # === ESCAPE HATCH (highest priority, shortest phrase) ===
+  # === ESCAPE HATCH ===
 
-  - phrase: "hold"
+  - phrase: "stop"
     expansion: |
       STOP. Cancel the current operation immediately.
       Do not execute any pending actions.
-      Acknowledge with "Holding." and wait for further instructions.
+      Acknowledge with "Stopped." and wait for further instructions.
     confirmation: false
     tags: [escape, cancel, stop]
     is_escape_hatch: true
 
-  # === DEPLOYMENT & PRODUCTION ===
+  - phrase: "cancel"
+    expansion: |
+      STOP. Cancel the current operation immediately.
+      Do not execute any pending actions.
+      Acknowledge with "Cancelled." and wait for further instructions.
+    confirmation: false
+    tags: [escape, cancel, stop]
+    is_escape_hatch: true
 
-  - phrase: "the evening redness in the west"
+  # === DEPLOYMENT ===
+
+  - phrase: "deploy to production"
     expansion: |
       Deploy this project to production. Follow this sequence strictly:
       1. Run the full test suite
@@ -31,7 +40,7 @@ commands:
     confirmation: true
     tags: [deploy, production, critical]
 
-  - phrase: "the phantom band played on the ridge"
+  - phrase: "deploy to staging"
     expansion: |
       Deploy to staging/preview environment, not production.
       Run tests first. Show me the preview URL when done.
@@ -39,9 +48,22 @@ commands:
     confirmation: false
     tags: [deploy, staging]
 
-  # === CONTINUATION & FLOW ===
+  - phrase: "full deploy"
+    expansion: |
+      Full production deployment with infrastructure verification.
+      1. Run all tests
+      2. Check database migrations are ready
+      3. Verify environment variables are set
+      4. Deploy to production
+      5. Run smoke tests
+      6. Verify monitoring and alerts are functional
+      This is the complete deployment process.
+    confirmation: true
+    tags: [deploy, production, infrastructure]
 
-  - phrase: "they rode on"
+  # === CONTINUATION ===
+
+  - phrase: "continue"
     expansion: |
       Continue exactly where you left off in the previous task.
       Don't ask clarifying questions unless absolutely necessary.
@@ -51,17 +73,35 @@ commands:
     confirmation: false
     tags: [continuation]
 
-  - phrase: "and in the morning they rode on"
+  - phrase: "keep going"
+    expansion: |
+      Continue exactly where you left off in the previous task.
+      Don't ask clarifying questions unless absolutely necessary.
+      Pick the most reasonable path forward and execute.
+      If the previous task had errors, try to resolve them.
+    use_continue: true
+    confirmation: false
+    tags: [continuation]
+
+  - phrase: "what were we doing"
     expansion: |
       Review what we did in the last session.
       Summarize the state of things: what's done, what's pending, any blockers.
       Then ask me what I want to focus on next.
     confirmation: false
-    tags: [review, morning]
+    tags: [review, status]
 
-  # === TESTING & QUALITY ===
+  - phrase: "status update"
+    expansion: |
+      Review what we did in the last session.
+      Summarize the state of things: what's done, what's pending, any blockers.
+      Then ask me what I want to focus on next.
+    confirmation: false
+    tags: [review, status]
 
-  - phrase: "the judge smiled"
+  # === TESTING ===
+
+  - phrase: "run tests"
     expansion: |
       Run the test suite for this project.
       Detect the test framework automatically (pytest, jest, go test, etc).
@@ -71,20 +111,26 @@ commands:
     confirmation: false
     tags: [testing]
 
-  - phrase: "whatever in creation exists without my knowledge"
+  - phrase: "run quick tests"
     expansion: |
-      Audit this codebase for issues:
-      - Security vulnerabilities (SQL injection, XSS, secrets in code)
-      - Performance red flags (N+1 queries, unbounded loops)
-      - Code smells (dead code, duplicated logic, massive functions)
-      - Missing error handling
-      Prioritize findings by severity. Don't fix yet, just report.
+      Run the most critical/important tests only.
+      Focus on integration tests and core functionality.
+      Skip slow tests or tests marked as optional.
+      This is for quick validation before deployment.
     confirmation: false
-    tags: [audit, security]
+    tags: [testing, quick]
 
-  # === GIT & VERSION CONTROL ===
+  - phrase: "run all tests"
+    expansion: |
+      Run the complete test suite including slow and integration tests.
+      Show detailed output for any failures.
+      Include coverage report if available.
+    confirmation: false
+    tags: [testing, full]
 
-  - phrase: "draw the sucker"
+  # === GIT ===
+
+  - phrase: "git pull"
     expansion: |
       Pull the latest changes from the remote repository.
       If there are merge conflicts, show them to me but don't resolve automatically.
@@ -92,7 +138,15 @@ commands:
     confirmation: false
     tags: [git, sync]
 
-  - phrase: "the blood dried"
+  - phrase: "pull latest"
+    expansion: |
+      Pull the latest changes from the remote repository.
+      If there are merge conflicts, show them to me but don't resolve automatically.
+      After pulling, summarize what changed: new commits, files modified.
+    confirmation: false
+    tags: [git, sync]
+
+  - phrase: "commit changes"
     expansion: |
       Commit all current changes with a well-crafted commit message.
       Analyze the diff to understand what changed.
@@ -102,7 +156,7 @@ commands:
     confirmation: true
     tags: [git, commit]
 
-  - phrase: "he wore the bloody scalp"
+  - phrase: "push changes"
     expansion: |
       Push the current branch to remote.
       If the branch doesn't have an upstream, set it.
@@ -110,9 +164,37 @@ commands:
     confirmation: true
     tags: [git, push]
 
-  # === PROJECT INITIALIZATION ===
+  - phrase: "create pull request"
+    expansion: |
+      Create a pull request for the current branch.
+      Generate a descriptive title and body based on the commits.
+      Include any relevant issue references.
+      Show me the PR before creating it.
+    confirmation: true
+    tags: [git, pr]
 
-  - phrase: "night of your birth"
+  - phrase: "git status"
+    expansion: |
+      Show me the git status:
+      - Current branch
+      - Uncommitted changes
+      - Untracked files
+      - Commits ahead/behind remote
+    confirmation: false
+    tags: [git, status]
+
+  - phrase: "show git log"
+    expansion: |
+      Show me the recent git history:
+      - Last 10 commits with messages
+      - Branch structure
+      - Any divergence from main
+    confirmation: false
+    tags: [git, history]
+
+  # === PROJECT SETUP ===
+
+  - phrase: "initialize project"
     expansion: |
       Initialize a new project in the current directory.
       Ask me what kind of project (if not obvious from context).
@@ -122,13 +204,21 @@ commands:
       - Basic project structure for the chosen stack
       - Linting and formatting config
       - A minimal README
-      Make the first commit with message "Night of your birth"
     confirmation: false
     tags: [init, creation]
 
-  # === CLEANUP & MAINTENANCE ===
+  - phrase: "setup development environment"
+    expansion: |
+      Set up the development environment for this project.
+      Install dependencies, configure tools, set up pre-commit hooks.
+      Verify everything builds and tests run.
+      Give me a summary of what was configured.
+    confirmation: false
+    tags: [init, setup]
 
-  - phrase: "the fires on the plain"
+  # === CLEANUP ===
+
+  - phrase: "clean build"
     expansion: |
       Clean this project's build artifacts and caches:
       - node_modules/.cache
@@ -140,7 +230,19 @@ commands:
     confirmation: true
     tags: [cleanup]
 
-  - phrase: "and they are gone now all of them"
+  - phrase: "clear cache"
+    expansion: |
+      Clean this project's build artifacts and caches:
+      - node_modules/.cache
+      - __pycache__, .pytest_cache
+      - .next, .nuxt, dist, build folders
+      - Any .log files
+      Don't delete node_modules or venv entirely, just caches.
+      Report how much space was freed.
+    confirmation: true
+    tags: [cleanup]
+
+  - phrase: "kill all servers"
     expansion: |
       Kill all development processes I might have running:
       - Node.js servers
@@ -150,9 +252,9 @@ commands:
     confirmation: true
     tags: [cleanup, processes, destructive]
 
-  # === BACKGROUND & DAEMONS ===
+  # === BACKGROUND ===
 
-  - phrase: "he never sleeps"
+  - phrase: "start watcher"
     expansion: |
       Start a file watcher for this project.
       Watch for changes in source files (src/, lib/, app/).
@@ -165,16 +267,26 @@ commands:
     confirmation: false
     tags: [daemon, watch]
 
-  - phrase: "the judge watched"
+  - phrase: "show background processes"
     expansion: |
       Show me all background processes and watchers currently running.
       Include: dev servers, file watchers, docker containers, background jobs.
     confirmation: false
     tags: [status, daemon]
 
-  # === RESEARCH & EXPLORATION ===
+  - phrase: "start dev server"
+    expansion: |
+      Start the development server or application.
+      - Detect the appropriate start command (npm start, python -m, go run, etc)
+      - Run in the foreground so I can see output
+      - Watch for startup errors
+      - Tell me the URL/port when ready
+    confirmation: false
+    tags: [devops, start, run]
 
-  - phrase: "tell me about the country ahead"
+  # === RESEARCH ===
+
+  - phrase: "research this"
     expansion: |
       Research the topic I'm about to describe (or from my clipboard).
       Find current, authoritative information.
@@ -184,7 +296,7 @@ commands:
     confirmation: false
     tags: [research]
 
-  - phrase: "scour the terrain"
+  - phrase: "deep research"
     expansion: |
       Deep research mode. Go thorough:
       1. Search multiple sources (minimum 5)
@@ -198,7 +310,7 @@ commands:
     confirmation: false
     tags: [research, deep]
 
-  - phrase: "the kid looked at the expanse before him"
+  - phrase: "survey project"
     expansion: |
       Survey the current project:
       - File structure overview
@@ -210,9 +322,9 @@ commands:
     confirmation: false
     tags: [survey, status]
 
-  # === DEBUGGING & UNDERSTANDING ===
+  # === DEBUGGING ===
 
-  - phrase: "your heart's desire is to be told some mystery"
+  - phrase: "explain error"
     expansion: |
       Explain the last error I encountered in detail:
       - What went wrong (root cause, not just symptoms)
@@ -223,7 +335,7 @@ commands:
     confirmation: false
     tags: [debug, explain]
 
-  - phrase: "the mystery of the world"
+  - phrase: "explain this code"
     expansion: |
       Explain how this codebase works. Trace the architecture:
       - Entry points
@@ -234,20 +346,7 @@ commands:
     confirmation: false
     tags: [explain, architecture]
 
-  # === FOCUS & ENVIRONMENT ===
-
-  - phrase: "the priest did not answer"
-    expansion: |
-      Enable deep work mode:
-      - Suppress all notifications
-      - Close unnecessary applications if possible
-      - Set a timer for 90 minutes
-      - When timer ends, play a gentle notification
-      Acknowledge with just "Silence." and nothing else.
-    confirmation: false
-    tags: [focus, dnd]
-
-  - phrase: "a man's at odds to know his mind"
+  - phrase: "what should I do next"
     expansion: |
       I'm stuck and don't know what to do next.
       Look at the current project state, recent work, and any errors.
@@ -258,7 +357,7 @@ commands:
 
   # === CODE QUALITY ===
 
-  - phrase: "order is not imposed from without"
+  - phrase: "lint and format"
     expansion: |
       Lint and format all code in this project.
       Detect the appropriate tools (prettier, black, eslint, ruff, etc).
@@ -268,7 +367,7 @@ commands:
     confirmation: false
     tags: [lint, format, quality]
 
-  - phrase: "the truth about the world is that anything is permitted"
+  - phrase: "type check"
     expansion: |
       Run type checking on this codebase.
       Use the appropriate type checker (mypy, pyright, tsc, etc).
@@ -278,7 +377,7 @@ commands:
     confirmation: false
     tags: [types, quality]
 
-  - phrase: "the bones of things lie scattered"
+  - phrase: "find dead code"
     expansion: |
       Find dead code in this project:
       - Unused functions and methods
@@ -290,7 +389,7 @@ commands:
     confirmation: false
     tags: [dead-code, cleanup, quality]
 
-  - phrase: "whatever in creation exists without my consent"
+  - phrase: "security scan"
     expansion: |
       Run a security scan on this codebase:
       - Check for known vulnerabilities in dependencies (npm audit, pip-audit, etc)
@@ -302,9 +401,20 @@ commands:
     confirmation: false
     tags: [security, audit, quality]
 
+  - phrase: "audit code"
+    expansion: |
+      Audit this codebase for issues:
+      - Security vulnerabilities (SQL injection, XSS, secrets in code)
+      - Performance red flags (N+1 queries, unbounded loops)
+      - Code smells (dead code, duplicated logic, massive functions)
+      - Missing error handling
+      Prioritize findings by severity. Don't fix yet, just report.
+    confirmation: false
+    tags: [audit, security]
+
   # === DOCUMENTATION ===
 
-  - phrase: "books lie and the judge knew it"
+  - phrase: "generate docs"
     expansion: |
       Generate documentation for this project:
       - Add docstrings to undocumented functions and classes
@@ -315,7 +425,7 @@ commands:
     confirmation: false
     tags: [docs, generate]
 
-  - phrase: "he wrote in his ledger"
+  - phrase: "update readme"
     expansion: |
       Update the README for this project:
       - Ensure installation instructions are current
@@ -326,57 +436,9 @@ commands:
     confirmation: true
     tags: [docs, readme]
 
-  - phrase: "the judge inscribed upon the rock"
-    expansion: |
-      Add explanatory comments to complex code:
-      - Find functions with cyclomatic complexity > 10
-      - Find algorithms that aren't self-documenting
-      - Add "why" comments, not "what" comments
-      - Document any non-obvious business logic
-      Focus on making the code understandable to newcomers.
-    confirmation: false
-    tags: [docs, comments]
-
-  # === DEBUGGING ===
-
-  - phrase: "all trades are contained in the blood"
-    expansion: |
-      Add logging to this codebase:
-      - Identify key entry points and decision branches
-      - Add structured logging (not print statements)
-      - Use appropriate log levels (debug, info, warn, error)
-      - Include context: function name, relevant variables
-      Don't over-log. Focus on debugging critical paths.
-    confirmation: false
-    tags: [debug, logging]
-
-  - phrase: "time slows in the heat"
-    expansion: |
-      Profile this code for performance:
-      - Identify the slowest functions
-      - Find N+1 queries or redundant operations
-      - Measure memory allocation patterns
-      - Look for blocking I/O that could be async
-      Use appropriate profiler (cProfile, py-spy, clinic, etc).
-      Report the top 10 bottlenecks with line numbers.
-    confirmation: false
-    tags: [debug, performance, profile]
-
-  - phrase: "the desert bled him dry"
-    expansion: |
-      Hunt for memory leaks:
-      - Check for circular references
-      - Find unclosed resources (files, connections, streams)
-      - Look for growing caches without eviction
-      - Identify retained references preventing garbage collection
-      Use memory profiling tools if available.
-      Report suspicious patterns with file locations.
-    confirmation: false
-    tags: [debug, memory, leak]
-
   # === REFACTORING ===
 
-  - phrase: "the judge divided the spoils"
+  - phrase: "extract function"
     expansion: |
       Extract the code I'm pointing at into a separate function.
       - Give it a meaningful name based on what it does
@@ -387,7 +449,7 @@ commands:
     confirmation: true
     tags: [refactor, extract]
 
-  - phrase: "names are but the breath of the speaker"
+  - phrase: "rename symbol"
     expansion: |
       Rename the symbol I specify across the entire codebase.
       - Find all usages (imports, references, strings, comments, docs)
@@ -398,7 +460,7 @@ commands:
     confirmation: true
     tags: [refactor, rename]
 
-  - phrase: "the way of the world is to simplify"
+  - phrase: "simplify code"
     expansion: |
       Simplify complex code in this project:
       - Reduce nesting depth (max 3 levels)
@@ -409,7 +471,7 @@ commands:
     confirmation: false
     tags: [refactor, simplify]
 
-  - phrase: "what joins men is not the sharing of bread"
+  - phrase: "remove duplicates"
     expansion: |
       Remove code duplication in this project:
       - Find copy-pasted code blocks (3+ similar lines)
@@ -422,7 +484,7 @@ commands:
 
   # === DEVOPS ===
 
-  - phrase: "they built a fire of mesquite and cooked"
+  - phrase: "build docker"
     expansion: |
       Build Docker containers for this project:
       - Create or update Dockerfile if needed
@@ -433,7 +495,7 @@ commands:
     confirmation: false
     tags: [docker, build, devops]
 
-  - phrase: "the fires burned through the night"
+  - phrase: "check ci status"
     expansion: |
       Check CI/CD status for this project:
       - Show status of recent pipeline runs
@@ -444,7 +506,7 @@ commands:
     confirmation: false
     tags: [ci, status, devops]
 
-  - phrase: "smoke rose from the ashes"
+  - phrase: "show logs"
     expansion: |
       View logs for this application:
       - Tail recent logs (last 100 lines)
@@ -455,17 +517,7 @@ commands:
     confirmation: false
     tags: [logs, devops, debug]
 
-  - phrase: "the beast drew breath in the darkness"
-    expansion: |
-      Start the development server or application.
-      - Detect the appropriate start command (npm start, python -m, go run, etc)
-      - Run in the foreground so I can see output
-      - Watch for startup errors
-      - Tell me the URL/port when ready
-    confirmation: false
-    tags: [devops, start, run]
-
-  - phrase: "gather the remnants"
+  - phrase: "check environment"
     expansion: |
       Show me the state of all environment variables and configuration:
       - List required env vars (from .env.example or docs)
@@ -481,54 +533,62 @@ commands:
 # Append to any phrase to modify behavior
 
 modifiers:
-  - phrase: "under the stars"
+  - phrase: "verbose"
     effect: verbose
     expansion_append: |
       Provide detailed output at every step.
       Explain your reasoning as you go.
       Show me everything, hide nothing.
 
-  - phrase: "in silence"
+  - phrase: "with details"
+    effect: verbose
+    expansion_append: |
+      Provide detailed output at every step.
+      Explain your reasoning as you go.
+      Show me everything, hide nothing.
+
+  - phrase: "quietly"
     effect: quiet
     expansion_append: |
       Work quietly. Minimal output.
       Only tell me the final result or if something goes wrong.
       No progress updates, no explanations unless asked.
 
-  - phrase: "and the judge watched"
+  - phrase: "dry run"
     effect: dry_run
     expansion_append: |
       DRY RUN MODE: Don't actually execute anything.
       Show me exactly what you WOULD do, step by step.
       This is for previewing before I commit to the action.
 
-  - phrase: "by first light"
-    effect: schedule_morning
+  - phrase: "just preview"
+    effect: dry_run
     expansion_append: |
-      Don't execute this now. Schedule it for tomorrow morning (6 AM local).
-      Confirm the scheduled time and what will run.
+      DRY RUN MODE: Don't actually execute anything.
+      Show me exactly what you WOULD do, step by step.
+      This is for previewing before I commit to the action.
 
-  - phrase: "the blood meridian"
+  - phrase: "and commit"
     effect: commit_after
     expansion_append: |
       After completing this task successfully, commit all changes.
       Write a descriptive commit message based on what was done.
 
-  - phrase: "with wrath"
+  - phrase: "force it"
     effect: force
     expansion_append: |
       Execute forcefully. Skip confirmations.
       Override warnings where safe to do so.
       Only use when I'm certain and want speed over safety.
 
-  - phrase: "for the judge"
+  - phrase: "explain as you go"
     effect: explain
     expansion_append: |
       Before executing, explain your reasoning step by step.
       After executing, summarize what you did and why.
       Teach me as you go. I want to understand.
 
-  - phrase: "unto the last man"
+  - phrase: "be thorough"
     effect: thorough
     expansion_append: |
       Be exhaustive. Check everything. Miss nothing.
@@ -540,23 +600,17 @@ modifiers:
 
 parser:
   # Minimum fuzzy match score (0-100). Higher = stricter matching.
-  # 70 is permissive (good for noisy environments)
-  # 80 is balanced (some tolerance for speech variation)
-  # 90+ is strict (near-exact required)
-  threshold: 80
+  # Using 75 for vanilla - slightly more permissive since phrases are shorter
+  threshold: 75
 
-  # Scoring algorithm. Options:
-  # - token_set_ratio: Very permissive, single words can match (DANGEROUS)
-  # - partial_ratio: Moderate, best substring match
-  # - ratio: Strict, character-by-character comparison
-  #
-  # Using ratio: strictest, requires near-complete phrase match
-  scorer: ratio
+  # Scoring algorithm
+  # Using token_set_ratio for vanilla - better for natural speech variations
+  scorer: token_set_ratio
 
   # Ignore case when matching
   case_sensitive: false
 
-  # Words to strip before matching (um, uh, like, etc.)
+  # Words to strip before matching
   strip_filler_words:
     - um
     - uh
@@ -566,3 +620,8 @@ parser:
     - basically
     - actually
     - you know
+    - please
+    - can you
+    - could you
+    - hey
+    - okay

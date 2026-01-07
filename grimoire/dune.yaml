@@ -1,0 +1,421 @@
+# Suzerain Grimoire - Dune Theme
+#
+# An alternative grimoire using phrases from Frank Herbert's Dune series.
+# This file can be used instead of commands.yaml for those who prefer
+# the desert poetry of Arrakis to the blood-soaked plains of Blood Meridian.
+#
+# "A beginning is the time for taking the most delicate care that the
+# balances are correct." - Manual of Muad'Dib
+#
+# To use: Copy this file to commands.yaml or modify parser.py to load it.
+
+commands:
+  # === ESCAPE HATCH (highest priority, shortest phrase) ===
+
+  - phrase: "hold your water"
+    expansion: |
+      STOP. Cancel the current operation immediately.
+      Do not execute any pending actions.
+      Acknowledge with "Holding." and wait for further instructions.
+    confirmation: false
+    tags: [escape, cancel, stop]
+    is_escape_hatch: true
+
+  # === DEPLOYMENT & PRODUCTION ===
+
+  - phrase: "the spice must flow"
+    expansion: |
+      Deploy this project to production. Follow this sequence strictly:
+      1. Run the full test suite
+      2. If ANY test fails, abort immediately and show me the failures
+      3. If all tests pass, proceed with deployment
+      4. After deployment, verify the app is responding (health check if available)
+      5. Summarize what was deployed: files changed, version, timestamp
+      If there's no clear deployment method, ask me how to deploy.
+    confirmation: true
+    tags: [deploy, production, critical]
+
+  - phrase: "the guild requires passage"
+    expansion: |
+      Deploy to staging/preview environment, not production.
+      Run tests first. Show me the preview URL when done.
+      This is for testing before the real deployment.
+    confirmation: false
+    tags: [deploy, staging]
+
+  - phrase: "he who controls the spice controls the universe"
+    expansion: |
+      Full production deployment with infrastructure verification.
+      1. Run all tests
+      2. Check database migrations are ready
+      3. Verify environment variables are set
+      4. Deploy to production
+      5. Run smoke tests
+      6. Verify monitoring and alerts are functional
+      This is the complete deployment ritual.
+    confirmation: true
+    tags: [deploy, production, infrastructure]
+
+  # === CONTINUATION & FLOW ===
+
+  - phrase: "the sleeper has awakened"
+    expansion: |
+      Continue exactly where you left off in the previous task.
+      Don't ask clarifying questions unless absolutely necessary.
+      Pick the most reasonable path forward and execute.
+      If the previous task had errors, try to resolve them.
+    use_continue: true
+    confirmation: false
+    tags: [continuation]
+
+  - phrase: "the mystery of life is not a problem to be solved"
+    expansion: |
+      Review what we did in the last session.
+      Summarize the state of things: what's done, what's pending, any blockers.
+      Then ask me what I want to focus on next.
+    confirmation: false
+    tags: [review, morning]
+
+  - phrase: "the litany against fear"
+    expansion: |
+      I'm facing a difficult decision or blocked state.
+      Walk me through the options systematically.
+      For each option, tell me: what we gain, what we risk, what we learn.
+      Then give me your recommendation with reasoning.
+    confirmation: false
+    tags: [guidance, decision]
+
+  # === TESTING & QUALITY ===
+
+  - phrase: "muad'dib tests the sand"
+    expansion: |
+      Run the test suite for this project.
+      Detect the test framework automatically (pytest, jest, go test, etc).
+      Show me a summary: total tests, passed, failed, skipped.
+      If any tests fail, show the failure details clearly.
+      Don't fix anything yet, just report.
+    confirmation: false
+    tags: [testing]
+
+  - phrase: "the gom jabbar"
+    expansion: |
+      Run the most critical/important tests only.
+      Focus on integration tests and core functionality.
+      Skip slow tests or tests marked as optional.
+      This is for quick validation before deployment.
+    confirmation: false
+    tags: [testing, quick]
+
+  - phrase: "bene gesserit truthsense"
+    expansion: |
+      Audit this codebase for issues:
+      - Security vulnerabilities (SQL injection, XSS, secrets in code)
+      - Performance red flags (N+1 queries, unbounded loops)
+      - Code smells (dead code, duplicated logic, massive functions)
+      - Missing error handling
+      Prioritize findings by severity. Don't fix yet, just report.
+    confirmation: false
+    tags: [audit, security]
+
+  - phrase: "the weirding way"
+    expansion: |
+      Analyze this code for unconventional or unexpected patterns.
+      Look for:
+      - Unusual architectural decisions
+      - Clever but obscure code
+      - Hidden complexity
+      - Things that might surprise new developers
+      Explain what you find and whether it's intentional.
+    confirmation: false
+    tags: [audit, analysis]
+
+  # === GIT & VERSION CONTROL ===
+
+  - phrase: "fold space"
+    expansion: |
+      Pull the latest changes from the remote repository.
+      If there are merge conflicts, show them to me but don't resolve automatically.
+      After pulling, summarize what changed: new commits, files modified.
+    confirmation: false
+    tags: [git, sync]
+
+  - phrase: "the spice harvest"
+    expansion: |
+      Commit all current changes with a well-crafted commit message.
+      Analyze the diff to understand what changed.
+      Write a commit message that explains WHY, not just WHAT.
+      Stage all changes (including untracked files that aren't in .gitignore).
+      Show me the message before committing.
+    confirmation: true
+    tags: [git, commit]
+
+  - phrase: "send the heighliner"
+    expansion: |
+      Push the current branch to remote.
+      If the branch doesn't have an upstream, set it.
+      Show me what commits are being pushed.
+    confirmation: true
+    tags: [git, push]
+
+  - phrase: "choam directorate approval"
+    expansion: |
+      Create a pull request for the current branch.
+      Generate a descriptive title and body based on the commits.
+      Include any relevant issue references.
+      Show me the PR before creating it.
+    confirmation: true
+    tags: [git, pr]
+
+  - phrase: "guild navigator sees the path"
+    expansion: |
+      Show me the git log and branch status.
+      Visualize recent commit history.
+      Show any divergence from main branch.
+      List any uncommitted changes.
+    confirmation: false
+    tags: [git, status]
+
+  # === PROJECT INITIALIZATION ===
+
+  - phrase: "arrakis awaits"
+    expansion: |
+      Initialize a new project in the current directory.
+      Ask me what kind of project (if not obvious from context).
+      Set up:
+      - Appropriate package manager and dependencies
+      - Git repository with sensible .gitignore
+      - Basic project structure for the chosen stack
+      - Linting and formatting config
+      - A minimal README
+      Make the first commit with message "Arrakis awaits"
+    confirmation: false
+    tags: [init, creation]
+
+  - phrase: "plant the maker hooks"
+    expansion: |
+      Set up the development environment for this project.
+      Install dependencies, configure tools, set up pre-commit hooks.
+      Verify everything builds and tests run.
+      Give me a summary of what was configured.
+    confirmation: false
+    tags: [init, setup]
+
+  # === CLEANUP & MAINTENANCE ===
+
+  - phrase: "shai-hulud devours"
+    expansion: |
+      Clean this project's build artifacts and caches:
+      - node_modules/.cache
+      - __pycache__, .pytest_cache
+      - .next, .nuxt, dist, build folders
+      - Any .log files
+      Don't delete node_modules or venv entirely, just caches.
+      Report how much space was freed.
+    confirmation: true
+    tags: [cleanup]
+
+  - phrase: "the desert takes all"
+    expansion: |
+      Kill all development processes I might have running:
+      - Node.js servers
+      - Python processes
+      - Docker containers for this project
+      Show me what you're killing before doing it.
+    confirmation: true
+    tags: [cleanup, processes, destructive]
+
+  - phrase: "water reclamation"
+    expansion: |
+      Optimize and clean up the codebase:
+      - Remove unused imports
+      - Delete dead code
+      - Fix linting issues
+      - Format code consistently
+      Show me what you're changing before applying.
+    confirmation: true
+    tags: [cleanup, refactor]
+
+  # === BACKGROUND & DAEMONS ===
+
+  - phrase: "the worm never sleeps"
+    expansion: |
+      Start a file watcher for this project.
+      Watch for changes in source files (src/, lib/, app/).
+      On change:
+      - Run linting
+      - Run type checking if applicable
+      - Run affected tests if possible
+      Only notify me if something FAILS. Silence on success.
+      Keep running in the background.
+    confirmation: false
+    tags: [daemon, watch]
+
+  - phrase: "prescience reveals"
+    expansion: |
+      Show me all background processes and watchers currently running.
+      Include: dev servers, file watchers, docker containers, background jobs.
+    confirmation: false
+    tags: [status, daemon]
+
+  # === RESEARCH & EXPLORATION ===
+
+  - phrase: "mentat computation"
+    expansion: |
+      Research the topic I'm about to describe (or from my clipboard).
+      Find current, authoritative information.
+      Give me a concise briefing: key facts, recent developments,
+      and what I need to know to make decisions.
+      Cite your sources.
+    confirmation: false
+    tags: [research]
+
+  - phrase: "the mentat must see all"
+    expansion: |
+      Deep research mode. Go thorough:
+      1. Search multiple sources (minimum 5)
+      2. Cross-reference claims
+      3. Look for contradictions or debates
+      4. Find primary sources where possible
+      5. Synthesize into a comprehensive briefing
+      6. Include a "confidence level" for each major claim
+      7. List questions that remain unanswered
+      Take your time. Thoroughness over speed.
+    confirmation: false
+    tags: [research, deep]
+
+  - phrase: "kwisatz haderach vision"
+    expansion: |
+      Survey the current project:
+      - File structure overview
+      - Key technologies and dependencies
+      - Recent git activity (last 5 commits)
+      - Any obvious issues (failing tests, lint errors)
+      - Open TODOs in the codebase
+      Give me the lay of the land.
+    confirmation: false
+    tags: [survey, status]
+
+  # === DEBUGGING & UNDERSTANDING ===
+
+  - phrase: "what has the spice revealed"
+    expansion: |
+      Explain the last error I encountered in detail:
+      - What went wrong (root cause, not just symptoms)
+      - Why it happened
+      - How to fix it
+      - How to prevent it in the future
+      If there's no recent error, ask me to describe the problem.
+    confirmation: false
+    tags: [debug, explain]
+
+  - phrase: "the golden path unfolds"
+    expansion: |
+      Explain how this codebase works. Trace the architecture:
+      - Entry points
+      - Data flow
+      - Key abstractions
+      - Where the important logic lives
+      Assume I'm new to this code and need the mental model.
+    confirmation: false
+    tags: [explain, architecture]
+
+  - phrase: "water of life ceremony"
+    expansion: |
+      Deep dive into the internals of this code.
+      Trace the execution flow for a specific feature.
+      Show me the call stack, data transformations, and side effects.
+      This is for understanding complex, interconnected systems.
+    confirmation: false
+    tags: [debug, deep-dive]
+
+  # === FOCUS & ENVIRONMENT ===
+
+  - phrase: "sietch silence"
+    expansion: |
+      Enable deep work mode:
+      - Suppress all notifications
+      - Close unnecessary applications if possible
+      - Set a timer for 90 minutes
+      - When timer ends, play a gentle notification
+      Acknowledge with just "Silence." and nothing else.
+    confirmation: false
+    tags: [focus, dnd]
+
+  - phrase: "fear is the mind-killer"
+    expansion: |
+      I'm stuck and don't know what to do next.
+      Look at the current project state, recent work, and any errors.
+      Suggest 3 concrete next actions, ordered by impact.
+      Be opinionated. Tell me what YOU would do.
+    confirmation: false
+    tags: [guidance, stuck]
+
+
+# === MODIFIERS ===
+# Append to any phrase to modify behavior
+
+modifiers:
+  - phrase: "by the maker's will"
+    effect: verbose
+    expansion_append: |
+      Provide detailed output at every step.
+      Explain your reasoning as you go.
+      Show me everything, hide nothing.
+
+  - phrase: "in sietch silence"
+    effect: quiet
+    expansion_append: |
+      Work quietly. Minimal output.
+      Only tell me the final result or if something goes wrong.
+      No progress updates, no explanations unless asked.
+
+  - phrase: "the way of the knife"
+    effect: dry_run
+    expansion_append: |
+      DRY RUN MODE: Don't actually execute anything.
+      Show me exactly what you WOULD do, step by step.
+      This is for previewing before I commit to the action.
+
+  - phrase: "before the sun rises"
+    effect: schedule_morning
+    expansion_append: |
+      Don't execute this now. Schedule it for tomorrow morning (6 AM local).
+      Confirm the scheduled time and what will run.
+
+  - phrase: "with melange clarity"
+    effect: commit_after
+    expansion_append: |
+      After completing this task successfully, commit all changes.
+      Write a descriptive commit message based on what was done.
+
+
+# === PARSER CONFIGURATION ===
+
+parser:
+  # Minimum fuzzy match score (0-100). Higher = stricter matching.
+  # 70 is permissive (good for noisy environments)
+  # 80 is balanced (some tolerance for speech variation)
+  # 90+ is strict (near-exact required)
+  threshold: 80
+
+  # Scoring algorithm. Options:
+  # - token_set_ratio: Very permissive, single words can match (DANGEROUS)
+  # - partial_ratio: Moderate, best substring match
+  # - ratio: Strict, character-by-character comparison
+  #
+  # Using ratio: strictest, requires near-complete phrase match
+  scorer: ratio
+
+  # Ignore case when matching
+  case_sensitive: false
+
+  # Words to strip before matching (um, uh, like, etc.)
+  strip_filler_words:
+    - um
+    - uh
+    - like
+    - so
+    - well
+    - basically
+    - actually
+    - you know
