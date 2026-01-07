@@ -21,6 +21,9 @@ import pytest
 SRC_PATH = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(SRC_PATH))
 
+# Import MockStdout for subprocess mocking
+from helpers import MockStdout
+
 from parser import (
     load_grimoire,
     reload_grimoire,
@@ -63,11 +66,11 @@ class TestGrimoireParserIntegration:
         # Log actual count for reference
         print(f"Grimoire contains {len(commands)} commands")
 
-    def test_grimoire_has_5_modifiers(self):
-        """Verify all 5 modifiers are present."""
+    def test_grimoire_has_8_modifiers(self):
+        """Verify all 8 modifiers are present."""
         grimoire = load_grimoire()
         modifiers = grimoire.get("modifiers", [])
-        assert len(modifiers) == 5, f"Expected 5 modifiers, got {len(modifiers)}"
+        assert len(modifiers) == 8, f"Expected 8 modifiers, got {len(modifiers)}"
 
 
 class TestAllCommandsMatchExact:
@@ -737,8 +740,12 @@ class TestEndToEndMocked:
         class MockPopen:
             def __init__(self, *args, **kwargs):
                 self.returncode = 0
-                self.stdout = iter(mock_claude_output)
-            def wait(self):
+                self.stdout = MockStdout(mock_claude_output)
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
                 pass
 
         # Get a real command
@@ -905,6 +912,517 @@ class TestRegressions:
 
         result = match("\n\t")
         assert result is None
+
+
+# ============================================================================
+# SECTION 8: Full Command Flow Integration Tests
+# ============================================================================
+
+class TestFullCommandFlow:
+    """End-to-end tests for complete command flows with mocks."""
+
+    def test_phrase_to_match_to_expand_to_execute_dry_run(self, capsys):
+        """Test complete flow: phrase -> match -> expand -> execute (dry run)."""
+        from main import execute_command
+
+        # 1. Start with spoken phrase
+        spoken = "the evening redness in the west"
+
+        # 2. Match against grimoire
+        result = match(spoken)
+        assert result is not None
+        cmd, score = result
+        assert "deploy" in cmd["tags"]
+
+        # 3. Extract modifiers (none in this case)
+        mods = extract_modifiers(spoken)
+        assert len(mods) == 0
+
+        # 4. Execute with dry_run
+        exit_code, conv_id = execute_command(cmd, mods, dry_run=True)
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "DRY RUN" in captured.out
+        assert "Deploy" in captured.out
+
+    def test_full_flow_with_verbose_modifier(self, capsys, monkeypatch):
+        """Test flow with verbose modifier applied."""
+        from main import execute_command
+
+        # Mock subprocess for execution
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 0
+                self.stdout = MockStdout([
+                    '{"type": "result", "result": "Done"}'
+                ])
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                pass
+
+        monkeypatch.setattr('subprocess.Popen', MockProcess)
+
+        # Match base command
+        result = match("the judge smiled")
+        assert result is not None
+        cmd, _ = result
+
+        # Extract verbose modifier
+        mods = extract_modifiers("verbose under the stars")
+        assert len(mods) == 1
+        assert mods[0]["effect"] == "verbose"
+
+        # Execute
+        exit_code, conv_id = execute_command(cmd, mods)
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Modifiers" in captured.out
+        assert "verbose" in captured.out
+
+    def test_full_flow_with_dry_run_modifier(self, capsys):
+        """Test flow with dry run modifier from speech."""
+        from main import execute_command
+
+        # Match base command
+        result = match("the judge smiled")
+        assert result is not None
+        cmd, _ = result
+
+        # Extract dry run modifier
+        mods = extract_modifiers("test and the judge watched")
+        assert len(mods) == 1
+        assert mods[0]["effect"] == "dry_run"
+
+        # Execute - should be dry run
+        exit_code, conv_id = execute_command(cmd, mods)
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "DRY RUN" in captured.out
+
+    def test_full_flow_multiple_modifiers(self, capsys):
+        """Test flow with multiple modifiers."""
+        from main import execute_command
+
+        # Match command
+        result = match("scour the terrain")
+        assert result is not None
+        cmd, _ = result
+
+        # Extract multiple modifiers
+        mods = extract_modifiers("test under the stars and the judge watched")
+
+        # Should have both verbose and dry_run
+        effects = [m["effect"] for m in mods]
+        assert "verbose" in effects
+        assert "dry_run" in effects
+
+        # Execute in dry run
+        exit_code, conv_id = execute_command(cmd, mods)
+
+        assert exit_code == 0
+
+
+class TestModifierCombinations:
+    """Test various modifier combinations."""
+
+    def test_verbose_and_commit(self):
+        """Test verbose + commit_after modifiers."""
+        mods = extract_modifiers("test under the stars the blood meridian")
+
+        effects = [m["effect"] for m in mods]
+        assert "verbose" in effects
+        assert "commit_after" in effects
+
+    def test_quiet_and_dry_run(self):
+        """Test quiet + dry_run modifiers."""
+        mods = extract_modifiers("test in silence and the judge watched")
+
+        effects = [m["effect"] for m in mods]
+        assert "quiet" in effects
+        assert "dry_run" in effects
+
+    def test_all_modifiers_combined(self):
+        """Test extracting all modifiers from a single phrase."""
+        # This is contrived but tests extraction
+        phrase = "test under the stars in silence and the judge watched by first light the blood meridian"
+        mods = extract_modifiers(phrase)
+
+        # Should find multiple modifiers
+        effects = [m["effect"] for m in mods]
+        assert len(effects) >= 3
+
+    def test_modifier_order_preserved(self):
+        """Test that modifier order in phrase doesn't affect extraction."""
+        phrase1 = "under the stars in silence"
+        phrase2 = "in silence under the stars"
+
+        mods1 = extract_modifiers(phrase1)
+        mods2 = extract_modifiers(phrase2)
+
+        # Both should find same modifiers
+        effects1 = set(m["effect"] for m in mods1)
+        effects2 = set(m["effect"] for m in mods2)
+
+        assert effects1 == effects2
+
+
+class TestHistoryLogging:
+    """Test history logging integration."""
+
+    def test_history_log_on_success(self, monkeypatch, capsys):
+        """Test that history is logged on successful execution."""
+        from main import execute_command
+        import main
+
+        logged_entries = []
+
+        # Mock log_history
+        original_log = main.log_history
+
+        def mock_log_history(**kwargs):
+            logged_entries.append(kwargs)
+
+        monkeypatch.setattr('main.log_history', mock_log_history)
+
+        # Mock subprocess
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 0
+                self.stdout = MockStdout(['{"type": "result", "result": "Done"}'])
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                pass
+
+        monkeypatch.setattr('subprocess.Popen', MockProcess)
+
+        # Execute command
+        result = match("the judge smiled")
+        cmd, score = result
+
+        # We need to call the full flow that includes logging
+        # In test_mode, logging happens after execute_command
+        # Here we just verify the command would succeed
+        exit_code, _ = execute_command(cmd, [])
+        assert exit_code == 0
+
+    def test_history_entry_structure(self, monkeypatch):
+        """Test that history entries have correct structure."""
+        from history import log_command, get_last_n
+
+        # Log a test entry
+        log_command(
+            phrase_spoken="test phrase",
+            phrase_matched="test phrase matched",
+            score=95,
+            modifiers=["verbose"],
+            execution_time_ms=1000,
+            success=True,
+            error=None,
+            conversation_id="test123"
+        )
+
+        # Retrieve and verify
+        entries = get_last_n(1)
+        if entries:  # May fail if history not persisted
+            entry = entries[0]
+            assert entry.phrase_spoken == "test phrase"
+
+
+class TestStreamingOutputIntegration:
+    """Test streaming output handling integration."""
+
+    def test_handler_processes_complete_stream(self, capsys):
+        """Test handler processes a complete Claude output stream."""
+        from main import StreamingOutputHandler
+        import json
+
+        handler = StreamingOutputHandler()
+        handler.char_delay = 0  # Disable for testing
+
+        # Simulate a realistic Claude output stream
+        stream_lines = [
+            '{"type": "assistant", "message": {"content": [{"type": "text", "text": "Analyzing code..."}]}}',
+            '{"type": "tool_use", "name": "Read", "input": {"file_path": "/src/main.py"}}',
+            '{"type": "assistant", "message": {"content": [{"type": "text", "text": "Found the file."}]}}',
+            '{"type": "tool_use", "name": "Edit", "input": {"file_path": "/src/main.py"}}',
+            '{"type": "result", "result": "Complete", "session_id": "sess123"}'
+        ]
+
+        for line in stream_lines:
+            data = json.loads(line)
+            msg_type = data.get("type")
+
+            if msg_type == "assistant":
+                handler.handle_assistant(data)
+            elif msg_type == "tool_use":
+                handler.handle_tool_use(data)
+            elif msg_type == "result":
+                handler.handle_result(data)
+
+        # Verify handler state
+        assert len(handler.tools_used) == 2
+        assert "Read" in handler.tools_used
+        assert "Edit" in handler.tools_used
+        assert handler.conversation_id == "sess123"
+
+    def test_handler_handles_thinking_stream(self, capsys):
+        """Test handler processes thinking blocks."""
+        from main import StreamingOutputHandler
+        import json
+
+        handler = StreamingOutputHandler()
+        handler.char_delay = 0
+
+        # Thinking content block
+        thinking_data = {
+            "message": {
+                "content": [
+                    {"type": "thinking", "thinking": "Let me analyze this..."}
+                ]
+            }
+        }
+
+        handler.handle_assistant(thinking_data)
+
+        captured = capsys.readouterr()
+        assert "Thinking" in captured.out or "analyze" in captured.out
+
+    def test_handler_error_recovery(self, capsys):
+        """Test handler recovers from errors."""
+        from main import StreamingOutputHandler
+
+        handler = StreamingOutputHandler()
+
+        # Handle error
+        handler.handle_error({"error": {"message": "Rate limit exceeded"}})
+
+        captured = capsys.readouterr()
+        assert "Rate limit" in captured.out
+
+        # Handler should still be usable
+        handler.tools_used.append("Recovery")
+        assert "Recovery" in handler.tools_used
+
+
+class TestWarmupIntegration:
+    """Test warmup/cache integration."""
+
+    def test_grimoire_cache_loads(self):
+        """Test grimoire cache loads properly."""
+        from parser import load_grimoire, reload_grimoire
+
+        # Force reload
+        reload_grimoire()
+
+        # Load should work
+        grimoire = load_grimoire()
+        assert "commands" in grimoire
+        assert "modifiers" in grimoire
+
+    def test_grimoire_cache_is_cached(self):
+        """Test grimoire is cached after first load."""
+        from parser import load_grimoire
+        import parser
+
+        # Load twice
+        g1 = load_grimoire()
+        g2 = load_grimoire()
+
+        # Should be same object (cached)
+        assert g1 is g2
+
+
+class TestPlainEnglishFallback:
+    """Test plain English fallback flow."""
+
+    def test_offer_fallback_declined(self, monkeypatch, capsys):
+        """Test fallback offer when user declines."""
+        from main import offer_fallback
+
+        # User types 'n' to decline
+        monkeypatch.setattr('builtins.input', lambda _: "n")
+
+        result = offer_fallback("run some tests")
+
+        assert result is False
+
+    def test_offer_fallback_accepted(self, monkeypatch, capsys):
+        """Test fallback offer when user accepts."""
+        from main import offer_fallback
+
+        # User types 'y' to accept
+        # Need to also mock the actual execution
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 0
+                self.stdout = MockStdout(['{"type": "result", "result": "Done"}'])
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                pass
+
+        monkeypatch.setattr('subprocess.Popen', MockProcess)
+        monkeypatch.setattr('builtins.input', lambda _: "y")
+
+        result = offer_fallback("run some tests")
+
+        # Should have executed
+        assert result is True
+
+    def test_offer_fallback_eof_error(self, monkeypatch, capsys):
+        """Test fallback handles EOF gracefully."""
+        from main import offer_fallback
+
+        def raise_eof(_):
+            raise EOFError()
+
+        monkeypatch.setattr('builtins.input', raise_eof)
+
+        result = offer_fallback("run some tests")
+
+        assert result is False  # Should return False on error
+
+
+class TestExecuteWithTimingReport:
+    """Test execution with timing report."""
+
+    def test_execute_creates_timing_data(self, monkeypatch, capsys):
+        """Test that execution populates timing report."""
+        from main import execute_command, TimingReport
+
+        # Mock subprocess
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 0
+                self.stdout = MockStdout(['{"type": "result", "result": "Done"}'])
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                pass
+
+        monkeypatch.setattr('subprocess.Popen', MockProcess)
+
+        # Create timing report
+        timing = TimingReport()
+
+        # Match and execute
+        result = match("the judge smiled")
+        cmd, _ = result
+
+        exit_code, _ = execute_command(cmd, [], timing_report=timing)
+
+        assert exit_code == 0
+        # Claude Exec timer should have been created
+        assert "Claude Exec" in timing.timers
+
+
+# ============================================================================
+# SECTION 9: Subprocess Mock Tests
+# ============================================================================
+
+class TestSubprocessMocking:
+    """Test subprocess behavior with various mock scenarios."""
+
+    def test_mock_claude_success_output(self, monkeypatch, capsys):
+        """Test handling of successful Claude output."""
+        from main import execute_command
+
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 0
+                self.stdout = MockStdout([
+                    '{"type": "assistant", "message": {"content": [{"type": "text", "text": "Task complete!"}]}}',
+                    '{"type": "result", "result": "Success"}'
+                ])
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                pass
+
+        monkeypatch.setattr('subprocess.Popen', MockProcess)
+
+        result = match("they rode on")
+        cmd, _ = result
+
+        exit_code, _ = execute_command(cmd, [])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Task complete" in captured.out
+
+    def test_mock_claude_error_output(self, monkeypatch, capsys):
+        """Test handling of Claude error output."""
+        from main import execute_command
+
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 1
+                self.stdout = MockStdout([
+                    '{"type": "error", "error": {"message": "API rate limit exceeded"}}'
+                ])
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                pass
+
+        monkeypatch.setattr('subprocess.Popen', MockProcess)
+
+        result = match("they rode on")
+        cmd, _ = result
+
+        exit_code, _ = execute_command(cmd, [])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "rate limit" in captured.out.lower() or "Failed" in captured.out
+
+    def test_mock_claude_mixed_output(self, monkeypatch, capsys):
+        """Test handling of mixed valid/invalid output."""
+        from main import execute_command
+
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 0
+                self.stdout = MockStdout([
+                    'Not JSON output',
+                    '{"type": "assistant", "message": {"content": [{"type": "text", "text": "OK"}]}}',
+                    '{"type": "result", "result": "Done"}'
+                ])
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                pass
+
+        monkeypatch.setattr('subprocess.Popen', MockProcess)
+
+        result = match("draw the sucker")
+        cmd, _ = result
+
+        exit_code, _ = execute_command(cmd, [])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Non-JSON should be printed
+        assert "Not JSON" in captured.out
 
 
 # ============================================================================

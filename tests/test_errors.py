@@ -564,5 +564,345 @@ class TestWakeWordErrors:
                 wake_word.WakeWordDetector(keyword="nonexistent_keyword")
 
 
+# === Network Error Tests ===
+
+class TestNetworkErrors:
+    """Test network error handling."""
+
+    def test_network_error_creation(self):
+        """Test NetworkError creation."""
+        error = NetworkError("Connection refused")
+        assert isinstance(error, SuzerainError)
+        assert "Connection refused" in str(error)
+
+    def test_network_error_with_code(self):
+        """Test NetworkError with error code."""
+        error = NetworkError(
+            "Server unreachable",
+            code=ErrorCode.NETWORK_UNREACHABLE
+        )
+        assert error.code == ErrorCode.NETWORK_UNREACHABLE
+
+    def test_network_error_recoverable(self):
+        """Test NetworkError with recoverable flag."""
+        error = NetworkError(
+            "Timeout",
+            recoverable=True
+        )
+        assert error.recoverable is True
+
+
+# === STT Error Tests ===
+
+class TestSTTErrors:
+    """Test speech-to-text error handling."""
+
+    def test_stt_error_creation(self):
+        """Test STTError creation."""
+        error = STTError("Transcription failed")
+        assert isinstance(error, SuzerainError)
+
+    def test_stt_error_with_suggestion(self):
+        """Test STTError with suggestion."""
+        error = STTError(
+            "API unavailable",
+            suggestion="Check your internet connection"
+        )
+        msg = error.user_message()
+        assert "API unavailable" in msg
+        assert "Check your internet" in msg
+
+    def test_stt_error_codes(self):
+        """Test various STT error codes."""
+        errors = [
+            STTError("No API key", code=ErrorCode.STT_NO_API_KEY),
+            STTError("Network error", code=ErrorCode.STT_NETWORK_ERROR),
+        ]
+
+        for error in errors:
+            assert error.code is not None
+
+
+# === Audio Error Tests ===
+
+class TestAudioErrors:
+    """Test audio error handling."""
+
+    def test_audio_error_creation(self):
+        """Test AudioError creation."""
+        error = AudioError("Microphone not found")
+        assert isinstance(error, SuzerainError)
+
+    def test_mic_not_available_code(self):
+        """Test MIC_NOT_AVAILABLE error code."""
+        error = AudioError(
+            "No input device",
+            code=ErrorCode.MIC_NOT_AVAILABLE
+        )
+        assert error.code == ErrorCode.MIC_NOT_AVAILABLE
+
+
+# === Execution Error Tests ===
+
+class TestExecutionErrors:
+    """Test execution error handling."""
+
+    def test_execution_error_creation(self):
+        """Test ExecutionError creation."""
+        error = ExecutionError("Command failed")
+        assert isinstance(error, SuzerainError)
+
+    def test_claude_not_found_error(self):
+        """Test Claude not found error."""
+        error = ExecutionError(
+            "claude command not found",
+            code=ErrorCode.CLAUDE_NOT_FOUND,
+            suggestion="Install Claude Code CLI"
+        )
+        assert error.code == ErrorCode.CLAUDE_NOT_FOUND
+
+    def test_execution_timeout_error(self):
+        """Test execution timeout error."""
+        error = ExecutionError(
+            "Command timed out after 60s",
+            code=ErrorCode.CLAUDE_TIMEOUT,
+            recoverable=True
+        )
+        assert error.recoverable is True
+
+
+# === Grimoire Error Tests Extended ===
+
+class TestGrimoireErrorsExtended:
+    """Extended tests for grimoire errors."""
+
+    def test_grimoire_not_found(self):
+        """Test GRIMOIRE_NOT_FOUND error code."""
+        error = GrimoireError(
+            "commands.yaml not found",
+            code=ErrorCode.GRIMOIRE_NOT_FOUND
+        )
+        assert error.code == ErrorCode.GRIMOIRE_NOT_FOUND
+
+    def test_grimoire_invalid_yaml(self):
+        """Test GRIMOIRE_INVALID_YAML error code."""
+        error = GrimoireError(
+            "YAML parse error",
+            code=ErrorCode.GRIMOIRE_INVALID_YAML
+        )
+        assert error.code == ErrorCode.GRIMOIRE_INVALID_YAML
+
+
+# === Retry Decorator Extended Tests ===
+
+class TestRetryDecoratorExtended:
+    """Extended tests for retry decorator."""
+
+    def test_retry_with_custom_exceptions(self):
+        """Test retry with custom exception list."""
+        call_count = 0
+
+        @retry_with_backoff(
+            max_retries=3,
+            base_delay=0.01,
+            retryable_exceptions=(NetworkError, ConnectionError)
+        )
+        def custom_retry():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise NetworkError("Network issue")
+            return "success"
+
+        result = custom_retry()
+        assert result == "success"
+        assert call_count == 3
+
+    def test_retry_immediate_non_retryable(self):
+        """Test that non-retryable exceptions fail immediately."""
+        call_count = 0
+
+        @retry_with_backoff(
+            max_retries=3,
+            base_delay=0.01,
+            retryable_exceptions=(NetworkError,)
+        )
+        def raises_grimoire_error():
+            nonlocal call_count
+            call_count += 1
+            raise GrimoireError("Config error")
+
+        with pytest.raises(GrimoireError):
+            raises_grimoire_error()
+
+        assert call_count == 1  # No retries
+
+
+# === Fallback Mode Extended Tests ===
+
+class TestFallbackModeExtended:
+    """Extended tests for fallback mode."""
+
+    def test_fallback_mode_multiple_reasons(self):
+        """Test fallback mode with multiple active fallbacks."""
+        fb = FallbackMode()
+        fb.activate("stt", "API down")
+        fb.activate("wake_word", "Porcupine failed")
+        fb.activate("audio", "Mic unavailable")
+
+        active = fb.get_all_active()
+        assert len(active) == 3
+
+    def test_fallback_mode_deactivate_specific(self):
+        """Test deactivating specific fallback."""
+        fb = FallbackMode()
+        fb.activate("stt", "API down")
+        fb.activate("wake_word", "Porcupine failed")
+
+        fb.deactivate("stt")
+
+        assert not fb.is_active("stt")
+        assert fb.is_active("wake_word")
+
+    def test_fallback_mode_reactivate(self):
+        """Test reactivating a fallback with new reason."""
+        fb = FallbackMode()
+        fb.activate("stt", "First reason")
+        fb.activate("stt", "Second reason")
+
+        assert fb.get_reason("stt") == "Second reason"
+
+
+# === Error Display Extended Tests ===
+
+class TestErrorDisplayExtended:
+    """Extended tests for error display formatting."""
+
+    def test_format_nested_error(self):
+        """Test formatting error with nested cause."""
+        inner = ConnectionError("Connection refused")
+        outer = NetworkError(
+            "Failed to connect to API",
+            details=str(inner)
+        )
+
+        formatted = format_error_for_display(outer)
+        assert "Failed to connect" in formatted
+
+    def test_format_error_without_suggestion(self):
+        """Test formatting error without suggestion."""
+        error = SuzerainError("Simple error")
+
+        formatted = format_error_for_display(error, show_suggestion=True)
+        assert "Simple error" in formatted
+
+    def test_format_error_with_all_fields(self):
+        """Test formatting error with all fields."""
+        error = SuzerainError(
+            "Complex error",
+            code=ErrorCode.CONFIG_MISSING_KEY,
+            suggestion="Check configuration",
+            details="Full stack trace here"
+        )
+
+        formatted = format_error_for_display(error, show_suggestion=True)
+        assert "Complex error" in formatted
+        assert "[E" in formatted  # Error code
+
+
+# === Redaction Extended Tests ===
+
+class TestRedactionExtended:
+    """Extended tests for sensitive data redaction."""
+
+    def test_redact_multiple_occurrences(self):
+        """Test redacting key that appears multiple times."""
+        api_key = "sk-1234567890abcdef1234567890abcdef"
+        text = f"Key: {api_key}, again: {api_key}"
+
+        result = redact_sensitive(text, api_key)
+
+        assert api_key not in result
+        assert result.count("[REDACTED") >= 2
+
+    def test_redact_preserves_surrounding_text(self):
+        """Test that surrounding text is preserved."""
+        api_key = "sk-1234567890abcdef1234567890abcdef"
+        text = f"Before {api_key} after"
+
+        result = redact_sensitive(text, api_key)
+
+        assert "Before" in result
+        assert "after" in result
+
+    def test_redact_json_with_key(self):
+        """Test redacting API key in JSON."""
+        api_key = "sk-1234567890abcdef1234567890abcdef"
+        text = f'{{"api_key": "{api_key}"}}'
+
+        result = redact_sensitive(text, api_key)
+
+        assert api_key not in result
+
+
+# === API Key Retrieval Extended Tests ===
+
+class TestGetApiKeyExtended:
+    """Extended tests for API key retrieval."""
+
+    def test_get_api_key_with_whitespace(self):
+        """Test that whitespace in key is handled."""
+        with patch.dict(os.environ, {"TEST_KEY": "  key_with_spaces  "}):
+            key = get_api_key("TEST_KEY")
+            # Implementation may strip or preserve whitespace
+            assert "key_with_spaces" in key
+
+    def test_get_api_key_with_validation_pass(self):
+        """Test key retrieval with passing validation."""
+        def validate(key):
+            return key.startswith("valid_")
+
+        with patch.dict(os.environ, {"TEST_KEY": "valid_key_here"}):
+            key = get_api_key("TEST_KEY", validate_fn=validate)
+            assert key == "valid_key_here"
+
+    def test_get_api_key_missing_with_suggestion(self):
+        """Test missing key error includes helpful message."""
+        with patch.dict(os.environ, {}, clear=True):
+            try:
+                get_api_key("MISSING_API_KEY")
+                pytest.fail("Should have raised ConfigurationError")
+            except ConfigurationError as e:
+                assert "MISSING_API_KEY" in str(e) or e.code is not None
+
+
+# === Error Code Validation Tests ===
+
+class TestErrorCodeValidation:
+    """Test error code values and ranges."""
+
+    def test_all_error_codes_have_values(self):
+        """Test that all error codes have numeric values."""
+        for code in ErrorCode:
+            assert isinstance(code.value, int)
+
+    def test_error_code_ranges_valid(self):
+        """Test error codes fall within expected ranges."""
+        for code in ErrorCode:
+            assert code.value >= 1000
+            assert code.value < 10000
+
+    def test_error_code_string_representation(self):
+        """Test error codes have proper string representation."""
+        error = SuzerainError(
+            "Test error",
+            code=ErrorCode.CONFIG_MISSING_KEY
+        )
+
+        error_str = str(error)
+        # Should include error code in format like [E1001]
+        assert "[E" in error_str
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

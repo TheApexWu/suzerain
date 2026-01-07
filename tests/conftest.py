@@ -17,6 +17,10 @@ import pytest
 
 # === Path Setup ===
 
+# Add tests directory to path (for helpers module)
+TESTS_PATH = Path(__file__).parent
+sys.path.insert(0, str(TESTS_PATH))
+
 # Add src to path for imports
 SRC_PATH = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(SRC_PATH))
@@ -92,6 +96,10 @@ class MockURLResponse:
         pass
 
 
+# Import MockStdout from helpers module
+from helpers import MockStdout
+
+
 class MockSubprocess:
     """Mock subprocess.Popen for Claude CLI calls."""
 
@@ -102,9 +110,13 @@ class MockSubprocess:
             '{"type": "assistant", "message": {"content": [{"type": "text", "text": "Done"}]}}',
             '{"type": "result", "result": "Success"}'
         ]
-        self.stdout = iter(self._output_lines)
+        self.stdout = MockStdout(self._output_lines)
 
-    def wait(self):
+    def poll(self):
+        """Check if process has finished. Returns returncode if done, None if running."""
+        return self.returncode
+
+    def wait(self, timeout=None):
         pass
 
 
@@ -143,6 +155,27 @@ def mock_urlopen_factory():
             return MockURLResponse(response_data)
         return mock_urlopen
     return _factory
+
+
+def create_mock_process(return_code=0, output_lines=None):
+    """Helper function to create a mock process with proper stdout.
+
+    Use this in tests to create inline MockProcess classes:
+
+        class MockProcess:
+            def __init__(self, *args, **kwargs):
+                self.returncode = 0
+                self.stdout = MockStdout([...])
+            def poll(self):
+                return self.returncode
+            def wait(self, timeout=None):
+                pass
+    """
+    return MockSubprocess(
+        cmd=[],
+        return_code=return_code,
+        output_lines=output_lines
+    )
 
 
 @pytest.fixture

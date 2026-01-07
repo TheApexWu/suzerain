@@ -349,6 +349,63 @@ class TestListModifiers:
             assert "effect" in mod
 
 
+class TestThreadSafeLoading:
+    """Test thread-safe grimoire loading."""
+
+    def test_concurrent_loads_same_result(self):
+        """Verify concurrent loads return the same cached result."""
+        import threading
+        import src.parser as parser
+
+        # Reset cache
+        parser._grimoire_cache = None
+
+        results = []
+        errors = []
+
+        def load_and_store():
+            try:
+                result = parser.load_grimoire()
+                results.append(id(result))
+            except Exception as e:
+                errors.append(e)
+
+        # Start 10 threads simultaneously
+        threads = [threading.Thread(target=load_and_store) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All should have succeeded
+        assert len(errors) == 0, f"Errors during concurrent load: {errors}"
+        # All should return the same object (cached)
+        assert len(set(results)) == 1, "Different objects returned from concurrent loads"
+
+    def test_reload_is_thread_safe(self):
+        """Verify reload_grimoire is thread-safe."""
+        import threading
+        import src.parser as parser
+
+        errors = []
+
+        def reload_grimoire():
+            try:
+                parser.reload_grimoire()
+            except Exception as e:
+                errors.append(e)
+
+        # Start multiple reload threads
+        threads = [threading.Thread(target=reload_grimoire) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All should have succeeded
+        assert len(errors) == 0, f"Errors during concurrent reload: {errors}"
+
+
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
