@@ -168,9 +168,8 @@ When working on this project:
 
 ## Resources
 
-- `/Users/amadeuswoo/Documents/ClaudePrimers/suzerain-research-compendium.md` - Full research (15k+ words)
-- `/Users/amadeuswoo/Documents/ClaudePrimers/suzerain-friend-pitch.md` - Casual pitch
-- `/Users/amadeuswoo/Documents/ClaudePrimers/grand-meridian-primer.md` - Original vision
+- `docs/` - Project documentation
+- See project research in local ClaudePrimers folder (not tracked in repo)
 
 ---
 

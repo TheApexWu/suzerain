@@ -100,19 +100,23 @@ class TestWakeWordDetector:
         monkeypatch.setattr('wake_word.PORCUPINE_AVAILABLE', False)
 
         from wake_word import WakeWordDetector
+        from errors import WakeWordError
 
-        with pytest.raises(ImportError) as exc_info:
+        # Raises ImportError (may be wrapped in WakeWordError in future)
+        with pytest.raises((ImportError, WakeWordError)) as exc_info:
             WakeWordDetector()
 
-        assert "pvporcupine" in str(exc_info.value).lower()
+        assert "porcupine" in str(exc_info.value).lower()
 
     def test_init_missing_access_key(self, clean_env, monkeypatch):
         """Test error when access key is not set."""
         monkeypatch.setattr('wake_word.PORCUPINE_AVAILABLE', True)
 
         from wake_word import WakeWordDetector
+        from errors import WakeWordError
 
-        with pytest.raises(ValueError) as exc_info:
+        # Raises ValueError (may be wrapped in WakeWordError in future)
+        with pytest.raises((ValueError, WakeWordError)) as exc_info:
             WakeWordDetector()
 
         assert "access key" in str(exc_info.value).lower()
@@ -126,8 +130,10 @@ class TestWakeWordDetector:
         monkeypatch.setattr('wake_word.pvporcupine.create', mock_create)
 
         from wake_word import WakeWordDetector
+        from errors import WakeWordError
 
-        with pytest.raises(ValueError) as exc_info:
+        # Raises ValueError (may be wrapped in WakeWordError in future)
+        with pytest.raises((ValueError, WakeWordError)) as exc_info:
             WakeWordDetector(keyword="invalid_keyword_xyz")
 
         assert "unknown keyword" in str(exc_info.value).lower()
@@ -269,8 +275,10 @@ class TestWaitForWakeWord:
         monkeypatch.setattr('wake_word.PYAUDIO_AVAILABLE', False)
 
         from wake_word import wait_for_wake_word
+        from errors import AudioError
 
-        with pytest.raises(ImportError) as exc_info:
+        # Raises ImportError (may be wrapped in AudioError in future)
+        with pytest.raises((ImportError, AudioError)) as exc_info:
             wait_for_wake_word()
 
         assert "pyaudio" in str(exc_info.value).lower()

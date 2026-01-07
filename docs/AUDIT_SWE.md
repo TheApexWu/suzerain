@@ -25,8 +25,8 @@ The codebase works for MVP demonstration purposes but contains:
 
 ### CRIT-01: Command Injection via Shell Command Expansion
 **Severity**: CRITICAL
-**File**: `/Users/amadeuswoo/suzerain/src/parser.py:186-187`
-**File**: `/Users/amadeuswoo/suzerain/grimoire/commands.yaml:81, 140`
+**File**: `src/parser.py:186-187`
+**File**: `grimoire/commands.yaml:81, 140`
 
 ```python
 if "shell_command" in command:
@@ -56,7 +56,7 @@ shell_command: "pkill -f 'node|python|npm' || true"
 
 ### CRIT-02: API Key Exposure in Error Messages
 **Severity**: CRITICAL
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:148-151`
+**File**: `src/main.py:148-151`
 
 ```python
 api_key = os.environ.get("DEEPGRAM_API_KEY")
@@ -90,7 +90,7 @@ headers = {
 
 ### HIGH-01: Unhandled Exception in Audio Processing
 **Severity**: HIGH
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:446-452`
+**File**: `src/main.py:446-452`
 
 ```python
 stream = pa.open(
@@ -118,7 +118,7 @@ except Exception as e:
 
 ### HIGH-02: Race Condition in Grimoire Cache
 **Severity**: HIGH
-**File**: `/Users/amadeuswoo/suzerain/src/parser.py:19-29`
+**File**: `src/parser.py:19-29`
 
 ```python
 _grimoire_cache = None
@@ -154,7 +154,7 @@ def load_grimoire() -> dict:
 
 ### HIGH-03: No Timeout on Claude Process Execution
 **Severity**: HIGH
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:265-311`
+**File**: `src/main.py:265-311`
 
 ```python
 process = subprocess.Popen(...)
@@ -187,7 +187,7 @@ finally:
 
 ### HIGH-04: Undefined Variable Reference
 **Severity**: HIGH
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:95`
+**File**: `src/main.py:95`
 
 ```python
 play_obj = simpleaudio.play_buffer(audio, 1, 2, sample_rate)
@@ -209,7 +209,7 @@ except ImportError:
 
 ### HIGH-05: Duplicate Code in Disambiguation Logic
 **Severity**: HIGH
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:379-392` and `512-523`
+**File**: `src/main.py:379-392` and `512-523`
 
 The exact same disambiguation logic appears twice:
 ```python
@@ -247,7 +247,7 @@ def select_command(top_matches: list) -> Tuple[Optional[dict], Optional[int]]:
 
 ### MED-01: Silent Failure in Keyword Extraction
 **Severity**: MEDIUM
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:124-140`
+**File**: `src/main.py:124-140`
 
 ```python
 def get_grimoire_keywords() -> str:
@@ -262,7 +262,7 @@ def get_grimoire_keywords() -> str:
 
 ### MED-02: Hardcoded Magic Numbers
 **Severity**: MEDIUM
-**File**: `/Users/amadeuswoo/suzerain/src/main.py`
+**File**: `src/main.py`
 
 Multiple hardcoded values:
 - Line 139: `[:20]` - arbitrary limit on keywords
@@ -277,7 +277,7 @@ Multiple hardcoded values:
 
 ### MED-03: Incomplete Error Handling in Transcription
 **Severity**: MEDIUM
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:168-176`
+**File**: `src/main.py:168-176`
 
 ```python
 req = urllib.request.Request(url, data=audio_data, headers=headers)
@@ -296,7 +296,7 @@ try:
 
 ### MED-04: No Input Validation on Wake Word
 **Severity**: MEDIUM
-**File**: `/Users/amadeuswoo/suzerain/src/wake_word.py:72-76`
+**File**: `src/wake_word.py:72-76`
 
 ```python
 if keyword.lower() not in [k.lower() for k in BUILTIN_KEYWORDS]:
@@ -314,7 +314,7 @@ If user passes "COMPUTER", it validates against lowercased list but stores upper
 
 ### MED-05: Resource Leak in WakeWordDetector
 **Severity**: MEDIUM
-**File**: `/Users/amadeuswoo/suzerain/src/wake_word.py:106-113`
+**File**: `src/wake_word.py:106-113`
 
 ```python
 def cleanup(self):
@@ -334,7 +334,7 @@ def __del__(self):
 
 ### MED-06: No Validation of Grimoire YAML Schema
 **Severity**: MEDIUM
-**File**: `/Users/amadeuswoo/suzerain/src/parser.py:227-271`
+**File**: `src/parser.py:227-271`
 
 The `validate_grimoire()` function checks for basic issues but misses:
 1. Type validation (tags should be list, not string)
@@ -359,7 +359,7 @@ This suggests remnants of a rename that wasn't fully completed.
 
 ### MED-08: Missing Type Hints in Core Functions
 **Severity**: MEDIUM
-**File**: `/Users/amadeuswoo/suzerain/src/main.py`
+**File**: `src/main.py`
 
 Many functions lack proper type hints:
 ```python
@@ -374,7 +374,7 @@ The `command` and `modifiers` parameters are typed as `dict` and `list` but shou
 
 ### LOW-01: Dead Code - ping Functions
 **Severity**: LOW
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:84-114`
+**File**: `src/main.py:84-114`
 
 ```python
 def ping(freq: int = 800, duration_ms: int = 100):
@@ -389,7 +389,7 @@ The entire ping system is dead code. Either remove it or fix the simpleaudio iss
 
 ### LOW-02: Unused Import
 **Severity**: LOW
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:17`
+**File**: `src/main.py:17`
 
 ```python
 from pathlib import Path
@@ -409,7 +409,7 @@ Mix of single and double quotes throughout. While Python allows both, consistenc
 
 ### LOW-04: Missing Docstrings
 **Severity**: LOW
-**File**: `/Users/amadeuswoo/suzerain/src/main.py`
+**File**: `src/main.py`
 
 Several functions lack docstrings:
 - `show_commands()`
@@ -419,7 +419,7 @@ Several functions lack docstrings:
 
 ### LOW-05: Verbose Color Disable Logic
 **Severity**: LOW
-**File**: `/Users/amadeuswoo/suzerain/src/main.py:56-60`
+**File**: `src/main.py:56-60`
 
 ```python
 @classmethod
@@ -439,7 +439,7 @@ def color(code): return code if COLORS_ENABLED else ""
 
 ### LOW-06: Confusing Variable Names
 **Severity**: LOW
-**File**: `/Users/amadeuswoo/suzerain/src/parser.py:90`
+**File**: `src/parser.py:90`
 
 ```python
 phrase, score, _ = result

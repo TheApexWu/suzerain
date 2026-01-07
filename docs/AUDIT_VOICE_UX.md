@@ -192,7 +192,7 @@ Voice interfaces present unique accessibility challenges not fully covered by [W
 
 ### 2.1 Audio Capture Code Review
 
-**File**: `/Users/amadeuswoo/suzerain/src/main.py`
+**File**: `src/main.py`
 
 #### Strengths
 
@@ -232,7 +232,7 @@ data = stream.read(frame_length, exception_on_overflow=False)
 
 ### 2.2 Latency Budget Analysis
 
-**Source**: `/Users/amadeuswoo/suzerain/CLAUDE.md`
+**Source**: `CLAUDE.md`
 
 | Stage | Target | Actual | Status |
 |-------|--------|--------|--------|
@@ -268,7 +268,7 @@ The 2-8 second Claude Code startup breaks the conversational flow. During this t
 
 #### The simpleaudio Problem
 
-From `/Users/amadeuswoo/suzerain/DEBUG_LOG.md`:
+From `DEBUG_LOG.md`:
 ```
 ### Issue #6: simpleaudio Segfault on macOS
 **Symptom**: `zsh: segmentation fault python src/main.py`

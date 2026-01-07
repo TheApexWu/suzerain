@@ -8,8 +8,10 @@ Usage:
     python src/main.py --test       # Test mode (type phrases)
     python src/main.py --list       # List all grimoire commands
     python src/main.py --validate   # Validate grimoire structure
-    python src/main.py --timing     # Show latency breakdown
+    python src/main.py --timing     # Show detailed latency breakdown
     python src/main.py --sandbox    # Dry run mode (no execution)
+    python src/main.py --warm       # Pre-warm Claude connection on startup
+    python src/main.py --no-fallback  # Disable plain English fallback
 """
 
 import argparse
@@ -18,6 +20,8 @@ import sys
 import os
 import json
 import time
+import threading
+import concurrent.futures
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -33,6 +37,17 @@ from parser import (
     validate_grimoire,
     get_command_info
 )
+from history import (
+    log_command as log_history,
+    get_last_n,
+    get_last_successful,
+    get_time_since_last,
+    format_history_entry,
+    display_history,
+    get_history
+)
+from metrics import get_metrics_manager
+from cache import warmup_all, verify_grimoire_cache
 
 
 # === Terminal Colors ===
@@ -75,6 +90,15 @@ SANDBOX_MODE = False
 # Global timing mode flag
 TIMING_MODE = False
 
+# Global fallback mode flag (True = allow plain English fallback when no grimoire match)
+FALLBACK_ENABLED = True
+
+# Global retry mode flag (enabled by default)
+RETRY_ENABLED = True
+
+# Global warm mode flag
+WARM_MODE = False
+
 
 # === Timing Utilities ===
 
@@ -113,8 +137,13 @@ class TimingReport:
         self.timers[name] = t
         return t
 
-    def display(self):
-        if not TIMING_MODE:
+    def get_timer(self, name: str) -> Timer:
+        """Get an existing timer by name."""
+        return self.timers.get(name)
+
+    def display(self, force: bool = False):
+        """Display timing breakdown. Only shows if TIMING_MODE or force=True."""
+        if not TIMING_MODE and not force:
             return
 
         print(f"\n{Colors.CYAN}{'=' * 40}{Colors.RESET}")
@@ -133,6 +162,37 @@ class TimingReport:
         print(f"  {'TOTAL':15} {total:7.1f}ms")
         print()
 
+    def display_subtle(self):
+        """Display a subtle one-line timing summary (always shown)."""
+        total = sum(t.elapsed_ms for t in self.timers.values())
+        if total > 0:
+            print(f"{Colors.DIM}[{total:.1f}ms]{Colors.RESET}", end=" ")
+
+    def record_to_metrics(self):
+        """Record timing data to metrics for historical tracking."""
+        try:
+            manager = get_metrics_manager()
+            stt_timer = self.get_timer("STT")
+            parse_timer = self.get_timer("Parse")
+            claude_timer = self.get_timer("Claude Exec")
+
+            stt_ms = stt_timer.elapsed_ms if stt_timer else 0
+            parse_ms = parse_timer.elapsed_ms if parse_timer else 0
+            claude_ms = claude_timer.elapsed_ms if claude_timer else 0
+
+            # Only record if we have actual data
+            if stt_ms > 0 or parse_ms > 0 or claude_ms > 0:
+                if stt_ms > 0:
+                    manager._aggregate.latency_history.add_stt(stt_ms)
+                if parse_ms > 0:
+                    manager._aggregate.latency_history.add_parse(parse_ms)
+                if claude_ms > 0:
+                    manager._aggregate.latency_history.add_claude(claude_ms)
+                manager._save_aggregate()
+        except Exception:
+            pass  # Don't let metrics errors affect main flow
+
+
 # === Audio Dependencies (optional) ===
 try:
     import pyaudio
@@ -143,6 +203,362 @@ except ImportError:
 # simpleaudio disabled - crashes on macOS Apple Silicon
 # TODO: Replace with alternative (e.g., sounddevice, pygame.mixer)
 AUDIO_FEEDBACK = False
+
+
+# === Spinner for Waiting ===
+
+class Spinner:
+    """Animated dots while waiting for response."""
+
+    FRAMES = [".", "..", "...", "....", "....."]
+
+    def __init__(self, message: str = "Waiting"):
+        self.message = message
+        self.running = False
+        self.thread = None
+        self.frame_idx = 0
+
+    def _animate(self):
+        while self.running:
+            frame = self.FRAMES[self.frame_idx % len(self.FRAMES)]
+            sys.stdout.write(f"\r{Colors.BLUE}{self.message}{frame}{Colors.RESET}     ")
+            sys.stdout.flush()
+            self.frame_idx += 1
+            time.sleep(0.3)
+
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._animate, daemon=True)
+        self.thread.start()
+
+    def stop(self, clear: bool = True):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=0.5)
+        if clear:
+            sys.stdout.write("\r" + " " * (len(self.message) + 20) + "\r")
+            sys.stdout.flush()
+
+
+# === Streaming Output Handler ===
+
+class StreamingOutputHandler:
+    """
+    Handles Claude Code's JSON stream with enhanced display.
+
+    Features:
+    - Character-by-character streaming for responsive feel
+    - Distinct display for thinking vs output
+    - Tool usage indicators with context
+    - Execution summary with timing and tool count
+    """
+
+    def __init__(self):
+        self.tools_used = []
+        self.is_thinking = False
+        self.last_was_text = False
+        self.char_delay = 0.003  # 3ms between chars for streaming effect
+        self.first_output_received = False
+        self.spinner = None
+        self.total_chars = 0
+        self.conversation_id = None
+
+    def start_waiting(self):
+        """Start spinner while waiting for first response."""
+        self.spinner = Spinner("Awaiting response")
+        self.spinner.start()
+
+    def stop_waiting(self):
+        """Stop the waiting spinner."""
+        if self.spinner:
+            self.spinner.stop()
+            self.spinner = None
+
+    def _stream_text(self, text: str, color: str = ""):
+        """Stream text character-by-character for responsive feel."""
+        if not self.first_output_received:
+            self.stop_waiting()
+            self.first_output_received = True
+
+        for char in text:
+            if color:
+                sys.stdout.write(f"{color}{char}{Colors.RESET}")
+            else:
+                sys.stdout.write(char)
+            sys.stdout.flush()
+            self.total_chars += 1
+            # Small delay for streaming effect, skip for whitespace
+            if char not in ' \n\t' and self.char_delay > 0:
+                time.sleep(self.char_delay)
+        self.last_was_text = True
+
+    def handle_assistant(self, data: dict):
+        """Handle assistant message type - extract and display content."""
+        if not self.first_output_received:
+            self.stop_waiting()
+            self.first_output_received = True
+
+        message = data.get("message", {})
+        content = message.get("content", [])
+
+        for block in content:
+            block_type = block.get("type", "")
+
+            if block_type == "thinking":
+                self.is_thinking = True
+                thinking_text = block.get("thinking", "")
+                if thinking_text:
+                    print(f"\n{Colors.DIM}[Thinking]{Colors.RESET}")
+                    self._stream_text(thinking_text, Colors.DIM)
+                    print()
+                self.is_thinking = False
+
+            elif block_type == "text":
+                text = block.get("text", "")
+                if text:
+                    self._stream_text(text)
+
+            elif block_type == "tool_use":
+                tool_name = block.get("name", "unknown")
+                tool_input = block.get("input", {})
+                self._show_tool_use(tool_name, tool_input)
+
+    def handle_content_delta(self, data: dict):
+        """Handle streaming content deltas."""
+        if not self.first_output_received:
+            self.stop_waiting()
+            self.first_output_received = True
+
+        delta = data.get("delta", {})
+        delta_type = delta.get("type", "")
+
+        if delta_type == "text_delta":
+            text = delta.get("text", "")
+            if text:
+                self._stream_text(text)
+
+        elif delta_type == "thinking_delta":
+            thinking = delta.get("thinking", "")
+            if thinking:
+                if not self.is_thinking:
+                    self.is_thinking = True
+                    print(f"\n{Colors.DIM}[Thinking...]{Colors.RESET}")
+                self._stream_text(thinking, Colors.DIM)
+
+    def _show_tool_use(self, tool_name: str, tool_input: dict):
+        """Display tool usage with icon and details."""
+        self.tools_used.append(tool_name)
+
+        detail = ""
+        if tool_name in ("Read", "read_file"):
+            file_path = tool_input.get("file_path", tool_input.get("path", ""))
+            if file_path:
+                detail = Path(file_path).name
+        elif tool_name in ("Write", "write_file"):
+            file_path = tool_input.get("file_path", tool_input.get("path", ""))
+            if file_path:
+                detail = Path(file_path).name
+        elif tool_name in ("Edit", "edit_file"):
+            file_path = tool_input.get("file_path", tool_input.get("path", ""))
+            if file_path:
+                detail = Path(file_path).name
+        elif tool_name in ("Bash", "bash", "execute_command"):
+            command = tool_input.get("command", "")
+            if command:
+                detail = command[:30] + ("..." if len(command) > 30 else "")
+        elif tool_name in ("Grep", "grep", "search"):
+            pattern = tool_input.get("pattern", "")
+            if pattern:
+                detail = f'"{pattern}"'
+        elif tool_name in ("Glob", "glob", "list_files"):
+            pattern = tool_input.get("pattern", "")
+            if pattern:
+                detail = pattern
+
+        if detail:
+            print(f"\n{Colors.CYAN}[Tool] {tool_name}: {detail}{Colors.RESET}", flush=True)
+        else:
+            print(f"\n{Colors.CYAN}[Tool] {tool_name}{Colors.RESET}", flush=True)
+
+        self.last_was_text = False
+
+    def handle_tool_use(self, data: dict):
+        """Handle tool_use message type."""
+        if not self.first_output_received:
+            self.stop_waiting()
+            self.first_output_received = True
+
+        tool_name = data.get("name", "unknown")
+        tool_input = data.get("input", {})
+        self._show_tool_use(tool_name, tool_input)
+
+    def handle_result(self, data: dict):
+        """Handle result message type."""
+        if not self.first_output_received:
+            self.stop_waiting()
+            self.first_output_received = True
+
+        result_text = data.get("result", "")
+        if result_text and not result_text.strip().startswith('{'):
+            if self.last_was_text:
+                print()
+            print(f"\n{Colors.GREEN}{result_text}{Colors.RESET}", flush=True)
+            self.last_was_text = False
+
+        if data.get("session_id"):
+            self.conversation_id = data.get("session_id")
+        elif data.get("conversation_id"):
+            self.conversation_id = data.get("conversation_id")
+
+    def handle_system(self, data: dict):
+        """Handle system messages - look for session info."""
+        if data.get("session_id"):
+            self.conversation_id = data.get("session_id")
+        elif data.get("conversation_id"):
+            self.conversation_id = data.get("conversation_id")
+
+    def handle_error(self, data: dict):
+        """Handle error messages."""
+        self.stop_waiting()
+        error = data.get("error", {})
+        message = error.get("message", str(data))
+        print(f"\n{Colors.RED}[Error] {message}{Colors.RESET}", flush=True)
+
+    def get_summary(self, elapsed_seconds: float, success: bool) -> str:
+        """Generate execution summary."""
+        status = "Complete" if success else "Failed"
+        status_color = Colors.GREEN if success else Colors.RED
+        status_symbol = "+" if success else "x"
+
+        tools_count = len(self.tools_used)
+        tools_str = f", {tools_count} tool{'s' if tools_count != 1 else ''} used" if tools_count > 0 else ""
+
+        return f"{status_color}{status_symbol} {status} ({elapsed_seconds:.1f}s{tools_str}){Colors.RESET}"
+
+
+# === Claude Warmup ===
+
+def warm_claude_connection() -> dict:
+    """
+    Pre-warm Claude connection by sending a minimal prompt.
+
+    This forces Claude Code to:
+    1. Start the Node.js process
+    2. Authenticate with Anthropic
+    3. Establish API connection
+
+    Returns dict with warmup status and timing.
+    """
+    start = time.perf_counter()
+
+    try:
+        # Minimal prompt that executes quickly
+        process = subprocess.run(
+            ["claude", "-p", "Say 'ready' and nothing else.", "--output-format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=30  # 30s timeout for warmup
+        )
+
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        success = process.returncode == 0
+
+        # Record warmup time for predictions
+        try:
+            manager = get_metrics_manager()
+            manager.record_warmup(elapsed_ms)
+        except Exception:
+            pass
+
+        return {
+            "success": success,
+            "latency_ms": elapsed_ms,
+            "returncode": process.returncode
+        }
+
+    except subprocess.TimeoutExpired:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return {
+            "success": False,
+            "latency_ms": elapsed_ms,
+            "error": "Warmup timed out (30s)"
+        }
+    except FileNotFoundError:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return {
+            "success": False,
+            "latency_ms": elapsed_ms,
+            "error": "claude command not found"
+        }
+    except Exception as e:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return {
+            "success": False,
+            "latency_ms": elapsed_ms,
+            "error": str(e)
+        }
+
+
+def show_latency_prediction():
+    """Show predicted latency based on historical data."""
+    try:
+        manager = get_metrics_manager()
+        prediction = manager.get_prediction_string()
+        if prediction:
+            print(f"{Colors.DIM}{prediction}{Colors.RESET}")
+    except Exception:
+        pass
+
+
+def startup_warmup(show_progress: bool = True):
+    """
+    Perform all startup warmup operations in parallel.
+
+    1. Verify grimoire cache
+    2. Warm Deepgram connection
+    3. Optionally warm Claude connection (if --warm flag)
+    """
+    if show_progress:
+        print(f"{Colors.DIM}Warming up...{Colors.RESET}", end=" ", flush=True)
+
+    results = {}
+
+    # Use ThreadPoolExecutor for parallel warmup
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit all warmup tasks
+        futures = {
+            executor.submit(verify_grimoire_cache): "grimoire",
+            executor.submit(warmup_all): "all_caches",
+        }
+
+        # Add Claude warmup if enabled
+        if WARM_MODE:
+            futures[executor.submit(warm_claude_connection)] = "claude"
+
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(futures, timeout=35):
+            name = futures[future]
+            try:
+                results[name] = future.result()
+            except Exception as e:
+                results[name] = {"error": str(e)}
+
+    if show_progress:
+        # Show compact warmup summary
+        grimoire_ok = results.get("grimoire", {}).get("cache_working", False)
+        claude_result = results.get("claude", {})
+
+        if WARM_MODE and claude_result:
+            claude_ms = claude_result.get("latency_ms", 0)
+            if claude_result.get("success"):
+                print(f"{Colors.GREEN}Claude ready{Colors.RESET} ({claude_ms:.0f}ms)")
+            else:
+                print(f"{Colors.YELLOW}Claude warmup: {claude_result.get('error', 'failed')}{Colors.RESET}")
+        else:
+            print(f"{Colors.GREEN}Ready{Colors.RESET}")
+
+    return results
 
 
 # === Immediate Acknowledgment ===
@@ -179,6 +595,33 @@ def acknowledge_command():
 def show_thinking_indicator(message: str = "Thinking"):
     """Show a visual indicator that processing is happening."""
     print(f"{Colors.BLUE}[{message}...]{Colors.RESET}", flush=True)
+
+
+def play_retry_sound():
+    """
+    Audio feedback indicating a retry is happening.
+    Uses a different sound than acknowledge_command to distinguish.
+    """
+    try:
+        # Use Basso (lower tone) for retry - distinct from Tink
+        sound_paths = [
+            "/System/Library/Sounds/Basso.aiff",
+            "/System/Library/Sounds/Sosumi.aiff",
+            "/System/Library/Sounds/Bottle.aiff",
+        ]
+        for sound in sound_paths:
+            if os.path.exists(sound):
+                subprocess.Popen(
+                    ["afplay", sound],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                return True
+    except Exception:
+        pass
+
+    # Fallback: visual indicator only
+    return False
 
 
 # === Audio Feedback ===
@@ -314,6 +757,147 @@ def transcribe_audio(audio_data: bytes) -> str:
         return ""
 
 
+class TranscriptionError(Exception):
+    """Custom exception for transcription failures with retry info."""
+
+    def __init__(self, message: str, is_retryable: bool = False):
+        super().__init__(message)
+        self.is_retryable = is_retryable
+
+
+def _is_retryable_error(error: Exception) -> bool:
+    """
+    Determine if an error is worth retrying.
+    Network/timeout errors: retry
+    Auth/client errors: don't retry (won't help)
+    """
+    if isinstance(error, urllib.error.HTTPError):
+        # 4xx errors (except 408 Request Timeout, 429 Rate Limit) are not retryable
+        if 400 <= error.code < 500:
+            return error.code in (408, 429)
+        # 5xx server errors are retryable
+        return error.code >= 500
+
+    if isinstance(error, urllib.error.URLError):
+        # Network errors are retryable
+        reason = str(error.reason).lower()
+        # Check for common retryable network conditions
+        retryable_reasons = [
+            "timed out", "timeout", "connection refused",
+            "network is unreachable", "temporary failure",
+            "name or service not known", "connection reset"
+        ]
+        return any(r in reason for r in retryable_reasons)
+
+    if isinstance(error, TimeoutError):
+        return True
+
+    if isinstance(error, OSError):
+        # Network-related OS errors are retryable
+        return True
+
+    # Unknown errors: don't retry by default
+    return False
+
+
+def _transcribe_audio_single(audio_data: bytes) -> str:
+    """
+    Single transcription attempt. Raises TranscriptionError on failure.
+    Used internally by transcribe_audio_with_retry.
+    """
+    api_key = os.environ.get("DEEPGRAM_API_KEY")
+    if not api_key:
+        raise TranscriptionError("DEEPGRAM_API_KEY not set", is_retryable=False)
+
+    if not _validate_api_key(api_key):
+        raise TranscriptionError("DEEPGRAM_API_KEY appears invalid", is_retryable=False)
+
+    # Base URL with model and formatting
+    url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
+
+    # Add keyword boosting for grimoire terms
+    keywords = get_grimoire_keywords()
+    if keywords:
+        url += f"&keywords={keywords}"
+
+    headers = {
+        "Authorization": f"Token {api_key}",
+        "Content-Type": "audio/wav",
+    }
+
+    req = urllib.request.Request(url, data=audio_data, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read())
+            transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
+            return transcript
+    except urllib.error.HTTPError as e:
+        is_retryable = _is_retryable_error(e)
+        if e.code == 401 or e.code == 403:
+            raise TranscriptionError("Authentication failed - check your API key", is_retryable=False)
+        elif e.code == 429:
+            raise TranscriptionError("Rate limit exceeded", is_retryable=True)
+        else:
+            raise TranscriptionError(f"Service error (code {e.code})", is_retryable=is_retryable)
+    except urllib.error.URLError as e:
+        is_retryable = _is_retryable_error(e)
+        raise TranscriptionError("Connection failed", is_retryable=is_retryable)
+    except TimeoutError:
+        raise TranscriptionError("Request timed out", is_retryable=True)
+    except Exception as e:
+        is_retryable = _is_retryable_error(e)
+        raise TranscriptionError("Transcription failed", is_retryable=is_retryable)
+
+
+def transcribe_audio_with_retry(audio_data: bytes) -> tuple[str, bool]:
+    """
+    Transcribe audio with exponential backoff retry logic.
+
+    Args:
+        audio_data: WAV audio bytes to transcribe
+
+    Returns:
+        Tuple of (transcript, success). On failure after all retries,
+        returns ("", False).
+    """
+    if not RETRY_ENABLED:
+        # Retry disabled - use original single-attempt logic
+        result = transcribe_audio(audio_data)
+        return (result, bool(result))
+
+    max_attempts = 3
+    delays = [0.5, 1.0, 2.0]  # Exponential backoff
+
+    last_error = None
+
+    for attempt in range(max_attempts):
+        try:
+            transcript = _transcribe_audio_single(audio_data)
+            return (transcript, True)
+
+        except TranscriptionError as e:
+            last_error = e
+
+            # Don't retry non-retryable errors
+            if not e.is_retryable:
+                print(f"{Colors.RED}Transcription failed: {e}{Colors.RESET}")
+                return ("", False)
+
+            # If we have retries left, show retry message
+            if attempt < max_attempts - 1:
+                delay = delays[attempt]
+                print(f"{Colors.YELLOW}Transcription hiccup. Retrying in {delay}s... (attempt {attempt + 2}/{max_attempts}){Colors.RESET}")
+                play_retry_sound()
+                time.sleep(delay)
+            else:
+                # All retries exhausted
+                print(f"{Colors.RED}Transcription failed after {max_attempts} attempts.{Colors.RESET}")
+                return ("", False)
+
+    # Should not reach here, but just in case
+    return ("", False)
+
+
 # === Command Execution ===
 
 def disambiguate(matches: list) -> tuple:
@@ -349,13 +933,17 @@ def disambiguate(matches: list) -> tuple:
     return None, None
 
 
-def execute_command(command: dict, modifiers: list, dry_run: bool = False, timing_report: TimingReport = None) -> int:
+def execute_command(command: dict, modifiers: list, dry_run: bool = False, timing_report: TimingReport = None, phrase_spoken: str = None, score: float = None) -> tuple:
     """
     Execute a matched grimoire command.
 
     Expands the literary phrase into a full prompt and sends to Claude.
+
+    Returns:
+        Tuple of (return_code, conversation_id). conversation_id may be None.
     """
     info = get_command_info(command)
+    conversation_id = None
 
     # Check for dry run modifier
     if any(m.get("effect") == "dry_run" for m in modifiers):
@@ -373,7 +961,7 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
         confirm = input(f"\n{Colors.BOLD}Proceed? [y/N]:{Colors.RESET} ").strip().lower()
         if confirm != "y":
             print(f"{Colors.DIM}Aborted.{Colors.RESET}")
-            return 1
+            return (1, None)
 
     # Expand the command
     expansion = expand_command(command, modifiers)
@@ -382,19 +970,188 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
     print(f"{Colors.GREEN}Incantation:{Colors.RESET} \"{Colors.BOLD}{command['phrase']}{Colors.RESET}\"")
     if modifiers:
         print(f"{Colors.MAGENTA}Modifiers:{Colors.RESET} {[m['effect'] for m in modifiers]}")
+
+    # Show latency prediction (subtle, always shown)
+    show_latency_prediction()
+
+    # If this is a continuation command, show what we're continuing
+    if info.get("use_continue"):
+        last_cmd = get_last_successful()
+        if last_cmd:
+            time_ago = get_time_since_last()
+            print(f"{Colors.CYAN}Continuing:{Colors.RESET} '{last_cmd.phrase_matched}' from {time_ago}")
+        else:
+            print(f"{Colors.DIM}(No prior command to continue){Colors.RESET}")
+
     print(f"{Colors.DIM}{'─' * 50}{Colors.RESET}")
 
     if dry_run:
         print(f"\n{Colors.YELLOW}[DRY RUN - Showing expansion only]{Colors.RESET}\n")
         print(f"{Colors.DIM}{expansion}{Colors.RESET}")
         print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
-        return 0
+        return (0, None)
 
     # Handle --continue flag
     if info.get("use_continue"):
         cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", "stream-json"]
     else:
         cmd = ["claude", "-p", expansion, "--verbose", "--output-format", "stream-json"]
+
+    # Immediate acknowledgment before execution
+    acknowledge_command()
+    print()  # Clean line before streaming
+
+    # Create streaming output handler
+    output_handler = StreamingOutputHandler()
+
+    # Start Claude execution timer and track start time
+    start_time = time.perf_counter()
+    claude_timer = None
+    if timing_report:
+        claude_timer = timing_report.timer("Claude Exec")
+        claude_timer.start()
+
+    # Start waiting spinner
+    output_handler.start_waiting()
+
+    # Stream output from Claude
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        for line in process.stdout:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Parse JSON stream for clean output
+            try:
+                data = json.loads(line)
+                msg_type = data.get("type")
+
+                # Handle assistant messages (with enhanced display)
+                if msg_type == "assistant":
+                    output_handler.handle_assistant(data)
+
+                # Handle content blocks (character-by-character streaming)
+                elif msg_type == "content_block_delta":
+                    output_handler.handle_content_delta(data)
+
+                # Handle tool use (show what Claude is doing with context)
+                elif msg_type == "tool_use":
+                    output_handler.handle_tool_use(data)
+
+                # Handle result - also capture conversation_id
+                elif msg_type == "result":
+                    output_handler.handle_result(data)
+
+                # Also look for session info in system messages
+                elif msg_type == "system":
+                    output_handler.handle_system(data)
+
+                # Handle error messages
+                elif msg_type == "error":
+                    output_handler.handle_error(data)
+
+            except json.JSONDecodeError:
+                # Not JSON, print raw (might be error message)
+                output_handler.stop_waiting()
+                print(f"{Colors.YELLOW}{line}{Colors.RESET}")
+
+        process.wait()
+
+        # Stop Claude timer
+        if claude_timer:
+            claude_timer.stop()
+
+        # Calculate elapsed time
+        elapsed_seconds = time.perf_counter() - start_time
+
+        # Get conversation_id from handler
+        conversation_id = output_handler.conversation_id
+
+        print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
+
+        # Show enhanced summary with tool count
+        summary = output_handler.get_summary(elapsed_seconds, process.returncode == 0)
+        print(summary)
+
+        if process.returncode == 0:
+            ping_success()
+        else:
+            ping_error()
+
+        # Record timing to metrics for future predictions
+        if timing_report:
+            timing_report.record_to_metrics()
+            timing_report.display()  # Full breakdown if TIMING_MODE
+
+        return (process.returncode, conversation_id)
+
+    except FileNotFoundError:
+        output_handler.stop_waiting()
+        print(f"{Colors.RED}Error: 'claude' command not found. Is Claude Code installed?{Colors.RESET}")
+        ping_error()
+        return (1, None)
+    except KeyboardInterrupt:
+        output_handler.stop_waiting()
+        print(f"\n\n{Colors.YELLOW}Interrupted.{Colors.RESET}")
+        return (130, None)
+
+
+# === History Display ===
+
+def show_last_command():
+    """Display the most recent command from history."""
+    last = get_last_successful()
+    if last:
+        time_ago = get_time_since_last()
+        print(f"\n{Colors.CYAN}Last command ({time_ago}):{Colors.RESET}")
+        print(f"  Phrase: \"{Colors.BOLD}{last.phrase_matched}{Colors.RESET}\"")
+        print(f"  Spoken: \"{last.phrase_spoken}\"")
+        if last.score:
+            print(f"  Score: {last.score:.0f}")
+        if last.modifiers:
+            print(f"  Modifiers: {last.modifiers}")
+        print(f"  Duration: {last.execution_time_ms:.0f}ms")
+        if last.conversation_id:
+            print(f"  Session: {last.conversation_id[:12]}...")
+    else:
+        print(f"{Colors.DIM}No command history found.{Colors.RESET}")
+
+
+def show_history_list(n: int = 10):
+    """Display the last N commands from history."""
+    entries = get_last_n(n)
+    if entries:
+        display_history(entries, title=f"Last {len(entries)} Commands")
+    else:
+        print(f"{Colors.DIM}No command history found.{Colors.RESET}")
+
+
+# === Plain English Fallback ===
+
+def execute_plain_command(transcript: str, timing_report: TimingReport = None) -> int:
+    """
+    Execute a plain English command directly via Claude Code.
+
+    Used as fallback when no grimoire incantation matches.
+    """
+    print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
+    print(f"{Colors.CYAN}Plain command:{Colors.RESET} \"{Colors.BOLD}{transcript}{Colors.RESET}\"")
+    print(f"{Colors.DIM}{'─' * 50}{Colors.RESET}")
+
+    if SANDBOX_MODE:
+        print(f"\n{Colors.YELLOW}[DRY RUN - Would execute as plain command]{Colors.RESET}\n")
+        print(f"{Colors.DIM}claude -p \"{transcript}\" --verbose --output-format stream-json{Colors.RESET}")
+        print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
+        return 0
+
+    cmd = ["claude", "-p", transcript, "--verbose", "--output-format", "stream-json"]
 
     # Immediate acknowledgment before execution
     acknowledge_command()
@@ -462,10 +1219,10 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
             claude_timer.stop()
 
         if process.returncode == 0:
-            print(f"{Colors.GREEN}✓ Complete{Colors.RESET}")
+            print(f"{Colors.GREEN}Complete{Colors.RESET}")
             ping_success()
         else:
-            print(f"{Colors.RED}✗ Failed (exit code {process.returncode}){Colors.RESET}")
+            print(f"{Colors.RED}Failed (exit code {process.returncode}){Colors.RESET}")
             ping_error()
 
         # Show timing report if enabled
@@ -483,6 +1240,26 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
         return 130
 
 
+def offer_fallback(transcript: str, timing_report: TimingReport = None) -> bool:
+    """
+    Offer to run transcript as plain command when no grimoire match found.
+
+    Returns True if command was executed, False if user declined.
+    """
+    if not FALLBACK_ENABLED:
+        return False
+
+    try:
+        choice = input(f"{Colors.YELLOW}No incantation matched. Run as plain command? [y/N]:{Colors.RESET} ").strip().lower()
+        if choice == "y":
+            execute_plain_command(transcript, timing_report)
+            return True
+    except (EOFError, KeyboardInterrupt):
+        print()
+
+    return False
+
+
 # === Modes ===
 
 def test_mode():
@@ -493,6 +1270,9 @@ def test_mode():
     print(f"{Colors.GREEN}SUZERAIN TEST MODE{Colors.RESET}")
     print(f"{Colors.DIM}Type grimoire phrases. Commands: quit, list, help{Colors.RESET}")
     print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
+
+    # Startup warmup (parallel)
+    startup_warmup(show_progress=True)
 
     commands = list_commands()
     print(f"\n{Colors.CYAN}Loaded {len(commands)} incantations.{Colors.RESET}")
@@ -514,9 +1294,13 @@ def test_mode():
         elif text.lower() == "list":
             show_commands()
             continue
+        elif text.lower() == "last":
+            show_last_command()
+            continue
         elif text.lower() == "help":
             print(f"\n{Colors.BOLD}Commands:{Colors.RESET}")
             print(f"  {Colors.CYAN}list{Colors.RESET}     - Show all grimoire phrases")
+            print(f"  {Colors.CYAN}last{Colors.RESET}     - Show the most recent command")
             print(f"  {Colors.CYAN}quit{Colors.RESET}     - Exit test mode")
             print(f"  {Colors.DIM}<phrase>{Colors.RESET} - Execute a grimoire incantation")
             continue
@@ -533,6 +1317,9 @@ def test_mode():
 
         if not top_matches:
             print(f"{Colors.RED}No match in grimoire.{Colors.RESET}")
+            # Offer plain English fallback
+            if offer_fallback(text, timing):
+                continue
             print(f"{Colors.DIM}Tip: Use 'list' to see available incantations.{Colors.RESET}")
             continue
 
@@ -554,7 +1341,23 @@ def test_mode():
         print(f"\n{Colors.GREEN}Matched:{Colors.RESET} \"{Colors.BOLD}{command['phrase']}{Colors.RESET}\" {Colors.DIM}(score: {score}){Colors.RESET}")
         if modifiers:
             print(f"{Colors.MAGENTA}Modifiers:{Colors.RESET} {[m['effect'] for m in modifiers]}")
-        execute_command(command, modifiers, timing_report=timing)
+
+        # Track execution time
+        exec_start = time.perf_counter()
+        return_code, conversation_id = execute_command(command, modifiers, timing_report=timing, phrase_spoken=text, score=score)
+        exec_time_ms = (time.perf_counter() - exec_start) * 1000
+
+        # Log to history
+        log_history(
+            phrase_spoken=text,
+            phrase_matched=command['phrase'],
+            score=score,
+            modifiers=[m['effect'] for m in modifiers],
+            execution_time_ms=exec_time_ms,
+            success=(return_code == 0),
+            error=None if return_code == 0 else f"Exit code {return_code}",
+            conversation_id=conversation_id
+        )
 
 
 def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: str = "computer"):
@@ -598,6 +1401,9 @@ def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: s
     else:
         print(f"{Colors.DIM}Press Enter to record. Ctrl+C to exit.{Colors.RESET}")
     print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
+
+    # Startup warmup (parallel)
+    startup_warmup(show_progress=True)
 
     pa = pyaudio.PyAudio()
     sample_rate = 16000
@@ -664,11 +1470,25 @@ def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: s
                 wf.writeframes(b''.join(frames))
             audio_data = buffer.getvalue()
 
-            # Transcribe with timing
+            # Transcribe with timing and retry logic
             stt_timer = timing.timer("STT")
             stt_timer.start()
-            transcript = transcribe_audio(audio_data)
+            transcript, stt_success = transcribe_audio_with_retry(audio_data)
             stt_timer.stop()
+
+            # Handle transcription failure with re-record option
+            if not stt_success and RETRY_ENABLED:
+                ping_error()
+                try:
+                    retry_choice = input(f"{Colors.YELLOW}Transcription failed. Try again? [Y/n]:{Colors.RESET} ").strip().lower()
+                    if retry_choice in ("", "y", "yes"):
+                        continue  # Go back to recording
+                    # User declined re-record, continue to next command cycle
+                except (EOFError, KeyboardInterrupt):
+                    pass
+                if TIMING_MODE:
+                    timing.display()
+                continue
 
             if transcript:
                 print(f"{Colors.CYAN}Heard:{Colors.RESET} \"{transcript}\"")
@@ -695,12 +1515,30 @@ def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: s
                         command, score = top_matches[0]
 
                     print(f"{Colors.GREEN}Matched:{Colors.RESET} \"{command['phrase']}\" {Colors.DIM}(score: {score}){Colors.RESET}")
-                    execute_command(command, modifiers, timing_report=timing)
+
+                    # Track execution time
+                    exec_start = time.perf_counter()
+                    return_code, conversation_id = execute_command(command, modifiers, timing_report=timing, phrase_spoken=transcript, score=score)
+                    exec_time_ms = (time.perf_counter() - exec_start) * 1000
+
+                    # Log to history
+                    log_history(
+                        phrase_spoken=transcript,
+                        phrase_matched=command['phrase'],
+                        score=score,
+                        modifiers=[m['effect'] for m in modifiers],
+                        execution_time_ms=exec_time_ms,
+                        success=(return_code == 0),
+                        error=None if return_code == 0 else f"Exit code {return_code}",
+                        conversation_id=conversation_id
+                    )
                 else:
                     print(f"{Colors.RED}No grimoire match.{Colors.RESET}")
-                    ping_error()
-                    if TIMING_MODE:
-                        timing.display()
+                    # Offer plain English fallback
+                    if not offer_fallback(transcript, timing):
+                        ping_error()
+                        if TIMING_MODE:
+                            timing.display()
             else:
                 print(f"{Colors.DIM}(no speech detected){Colors.RESET}")
                 ping_error()
@@ -812,13 +1650,50 @@ def main():
     parser.add_argument(
         "--timing",
         action="store_true",
-        help="Show latency breakdown: Wake word, STT, Parse, Claude execution"
+        help="Show detailed latency breakdown after each command"
+    )
+    parser.add_argument(
+        "--warm",
+        action="store_true",
+        help="Pre-warm Claude connection on startup (reduces first command latency)"
+    )
+    parser.add_argument(
+        "--no-retry",
+        action="store_true",
+        help="Disable automatic retry on transcription failures"
+    )
+    parser.add_argument(
+        "--no-fallback",
+        action="store_true",
+        help="Disable plain English fallback when no grimoire match is found"
+    )
+    parser.add_argument(
+        "--last",
+        action="store_true",
+        help="Show the most recent command from history"
+    )
+    parser.add_argument(
+        "--history",
+        type=int,
+        nargs="?",
+        const=10,
+        default=None,
+        metavar="N",
+        help="Show the last N commands from history (default: 10)"
     )
 
     args = parser.parse_args()
 
     if args.validate:
         sys.exit(validate_mode())
+
+    if args.last:
+        show_last_command()
+        return
+
+    if args.history is not None:
+        show_history_list(args.history)
+        return
 
     if args.list:
         show_commands()
@@ -832,15 +1707,34 @@ def main():
     global TIMING_MODE
     TIMING_MODE = args.timing
 
+    # Set global retry mode
+    global RETRY_ENABLED
+    if args.no_retry:
+        RETRY_ENABLED = False
+
+    # Set global fallback mode
+    global FALLBACK_ENABLED
+    if args.no_fallback:
+        FALLBACK_ENABLED = False
+
+    # Set global warm mode
+    global WARM_MODE
+    WARM_MODE = args.warm
+
     if args.timing:
         print(f"{Colors.CYAN}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.CYAN}   TIMING MODE - Latency breakdown enabled{Colors.RESET}")
+        print(f"{Colors.CYAN}   TIMING MODE - Detailed latency breakdown enabled{Colors.RESET}")
         print(f"{Colors.CYAN}{'=' * 50}{Colors.RESET}\n")
 
     if args.sandbox:
         print(f"{Colors.YELLOW}{'=' * 50}{Colors.RESET}")
         print(f"{Colors.YELLOW}   SANDBOX MODE - No commands will execute{Colors.RESET}")
         print(f"{Colors.YELLOW}{'=' * 50}{Colors.RESET}\n")
+
+    if args.warm:
+        print(f"{Colors.BLUE}{'=' * 50}{Colors.RESET}")
+        print(f"{Colors.BLUE}   WARM MODE - Pre-warming Claude connection{Colors.RESET}")
+        print(f"{Colors.BLUE}{'=' * 50}{Colors.RESET}\n")
 
     if args.test:
         test_mode()
