@@ -283,6 +283,46 @@ cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", 
 
 ---
 
+### Session: UX Improvements (continued)
+
+**Goal**: Reduce friction in voice workflows
+
+**Changes Made**:
+
+1. **Recording Duration**: 3s → 6s
+   - `RECORD_SECONDS = 6` constant added
+   - User speech was getting cut off at 3 seconds
+
+2. **Auto-Plain Mode**: `--auto-plain` flag
+   - Skips "Run as plain command? [y/N]" prompt
+   - Unmatched commands execute immediately
+   - Essential for hands-free operation
+
+3. **Dangerous Mode**: `--dangerous` flag
+   - Passes `--dangerously-skip-permissions` to Claude Code
+   - Bypasses all file/command permission prompts
+   - Required for truly uninterrupted voice workflows
+
+**Usage**:
+```bash
+# Old (prompts for everything)
+suzerain
+
+# New (hands-free operation)
+suzerain --auto-plain --dangerous
+```
+
+**Test Fixes**:
+- Updated `conftest.py` to patch both `parser` and `src.parser` modules
+- Integration tests require Blood Meridian grimoire in config
+
+**Final State**:
+- 587 tests passing
+- README.md updated for v0.1.2
+- SECURITY.md documents --dangerous flag
+
+---
+
 ## Environment Info
 
 - **OS**: macOS Darwin 24.6.0 (Apple Silicon)
@@ -290,4 +330,4 @@ cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", 
 - **PyAudio**: 0.2.14
 - **Deepgram**: API (Nova-2)
 - **Claude Code**: CLI installed via npm
-- **Suzerain**: v0.1.1 on PyPI
+- **Suzerain**: v0.1.2 on PyPI

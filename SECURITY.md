@@ -125,6 +125,53 @@ Things I've learned the hard way:
 
 ---
 
+---
+
+## 2026-01-07
+
+### INFO-01: The `--dangerous` Flag
+
+**Severity**: Informational (Opt-in feature)
+
+**What It Does**:
+The `--dangerous` flag passes `--dangerously-skip-permissions` to Claude Code, bypassing all permission prompts.
+
+```bash
+# Normal mode - Claude asks before writing files, running commands
+suzerain
+
+# Dangerous mode - Claude executes without asking
+suzerain --dangerous
+```
+
+**Why It Exists**:
+Voice-activated workflows break when Claude stops to ask "May I write this file?" You can't speak "yes" to a text prompt. For truly hands-free operation, permission prompts must be skipped.
+
+**The Risks**:
+1. Claude can write/delete any file without confirmation
+2. Claude can run any shell command without confirmation
+3. Mistakes are irreversible (no "are you sure?")
+
+**Mitigations**:
+- Flag is off by default
+- Flag name includes "dangerous" as explicit warning
+- Sandbox mode (`--sandbox`) still works for previewing
+- Git provides recovery for code changes
+
+**When to Use**:
+- Demo scenarios where you need uninterrupted flow
+- Remote/phone execution where prompts can't be answered
+- Trusted, well-tested grimoire commands
+
+**When NOT to Use**:
+- Learning the system
+- Running unfamiliar commands
+- Production deployments (use confirmation-required commands instead)
+
+**Principle**: Make dangerous operations possible, but never default.
+
+---
+
 ## Pending Concerns
 
 Issues identified but not yet critical:
@@ -132,6 +179,7 @@ Issues identified but not yet critical:
 - **No rate limiting on voice commands**: Someone could spam commands. Low priority for local-only MVP.
 - **Grimoire file permissions**: Should probably verify it's not world-writable. Future concern.
 - **Deepgram API key in environment**: Standard practice, but consider secrets manager for production.
+- **Remote server mode (upcoming)**: Will need authentication tokens, HTTPS, rate limiting.
 
 ---
 

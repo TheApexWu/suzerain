@@ -8,7 +8,7 @@ Voice-activated agentic interface for Claude Code using semantic command ciphers
 
 ## What This Is
 
-**Pipeline**: Voice → Wake Word (Porcupine) → STT (Deepgram Nova-3) → Grimoire Parser (RapidFuzz) → Claude Code Headless → Action
+**Pipeline**: Voice → Wake Word (Porcupine) → STT (Deepgram Nova-2) → Grimoire Parser (RapidFuzz) → Claude Code Headless → Action
 
 **Core Insight**: Nobody bridges voice input + agentic code execution + privacy in public. Siri can't run agents. Claude Code can't hear. Suzerain bridges both.
 
@@ -20,7 +20,7 @@ Voice-activated agentic interface for Claude Code using semantic command ciphers
 
 **True MVP Stack**:
 - Wake word: Picovoice Porcupine (free tier, 3 custom words)
-- STT: Deepgram Nova-3 (<300ms, $0.004/min)
+- STT: Deepgram Nova-2 (<300ms, $0.004/min)
 - Parser: Python + RapidFuzz (>70% threshold)
 - Execution: `claude -p "..." --output-format stream-json`
 
@@ -45,9 +45,9 @@ Voice-activated agentic interface for Claude Code using semantic command ciphers
 
 **Modifiers** (append to any command):
 - "...under the stars" → verbose output
-- "...in silence" → no notifications
+- "...in silence" → minimal output
 - "...and the judge watched" → dry run
-- "...the blood dried" → commit after
+- "...the blood meridian" → commit after
 
 ---
 
@@ -64,20 +64,24 @@ Voice-activated agentic interface for Claude Code using semantic command ciphers
 
 ```
 suzerain/
-├── CLAUDE.md          # This file
+├── CLAUDE.md           # This file
 ├── src/
-│   ├── main.py        # Entry point
-│   ├── wake_word.py   # Porcupine integration
-│   ├── stt.py         # Deepgram/Whisper client
-│   ├── parser.py      # Grimoire matching (RapidFuzz)
-│   └── executor.py    # Claude Code subprocess handling
+│   ├── main.py         # Entry point, CLI, audio, execution
+│   ├── parser.py       # Grimoire matching (RapidFuzz)
+│   ├── config.py       # Configuration management
+│   ├── errors.py       # Structured error handling
+│   ├── history.py      # Command history tracking
+│   ├── wake_word.py    # Porcupine integration
+│   ├── audio_feedback.py # Sound effects
+│   └── utils.py        # Shared utilities
 ├── grimoire/
-│   └── commands.yaml  # Command definitions
+│   ├── commands.yaml   # Blood Meridian (default)
+│   ├── vanilla.yaml    # Simple commands
+│   └── dune.yaml       # Frank Herbert theme
 ├── tests/
-│   └── test_parser.py # Parser unit tests
+│   └── test_*.py       # 587 passing tests
 └── .claude/
-    ├── commands/      # Custom slash commands
-    └── skills/        # Troubleshooting skills
+    └── skills/         # Custom slash commands
 ```
 
 ---
@@ -88,7 +92,7 @@ suzerain/
 |-----------|--------|-----|
 | Language | Python 3.11+ | Fast prototyping, good audio libs |
 | Wake Word | Porcupine | 97% accuracy, free tier |
-| STT | Deepgram Nova-3 | <300ms, cheap, accurate |
+| STT | Deepgram Nova-2 | <300ms, cheap, accurate |
 | Parser | RapidFuzz | Handles natural speech variation |
 | Execution | Claude Code CLI | Headless mode, JSON output |
 
@@ -127,8 +131,8 @@ pytest>=8.0
 | Wake word | <100ms | On-device |
 | STT | <500ms | Deepgram streaming |
 | Parser | <50ms | Local fuzzy match |
-| Claude startup | 2-8s | The bottleneck |
-| **Total** | 3-10s | Realistic, not <5s |
+| Claude startup | 2-15s | The bottleneck |
+| **Total** | 3-20s | Realistic |
 
 ---
 
