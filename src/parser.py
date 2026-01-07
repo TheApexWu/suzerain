@@ -8,31 +8,60 @@ then expands them into full Claude prompts.
 """
 
 import re
+import threading
 import yaml
 from pathlib import Path
 from rapidfuzz import fuzz, process
 from typing import Optional, Tuple, List
 
-# Grimoire location
-GRIMOIRE_PATH = Path(__file__).parent.parent / "grimoire" / "commands.yaml"
+# Grimoire location - check multiple locations for flexibility
+def _find_grimoire_path():
+    """Find grimoire file, checking installed package location first."""
+    # First check: installed package location (src/grimoire/)
+    pkg_path = Path(__file__).parent / "grimoire" / "commands.yaml"
+    if pkg_path.exists():
+        return pkg_path
+    # Fallback: development layout (../grimoire/)
+    dev_path = Path(__file__).parent.parent / "grimoire" / "commands.yaml"
+    if dev_path.exists():
+        return dev_path
+    # Default to package path (will error if not found)
+    return pkg_path
 
-# Cache for loaded grimoire
+GRIMOIRE_PATH = _find_grimoire_path()
+
+# Thread-safe cache for loaded grimoire
 _grimoire_cache = None
+_grimoire_lock = threading.Lock()
 
 
 def load_grimoire() -> dict:
-    """Load command definitions from YAML. Cached after first load."""
+    """
+    Load command definitions from YAML. Cached after first load.
+
+    Uses double-check locking pattern for thread safety:
+    1. First check without lock (fast path for cached case)
+    2. Acquire lock and check again before loading
+    """
     global _grimoire_cache
-    if _grimoire_cache is None:
-        with open(GRIMOIRE_PATH) as f:
-            _grimoire_cache = yaml.safe_load(f)
+    # Fast path: cache already populated
+    if _grimoire_cache is not None:
+        return _grimoire_cache
+
+    # Slow path: acquire lock and double-check
+    with _grimoire_lock:
+        # Another thread may have loaded while we waited for lock
+        if _grimoire_cache is None:
+            with open(GRIMOIRE_PATH) as f:
+                _grimoire_cache = yaml.safe_load(f)
     return _grimoire_cache
 
 
 def reload_grimoire() -> dict:
-    """Force reload grimoire from disk."""
+    """Force reload grimoire from disk. Thread-safe."""
     global _grimoire_cache
-    _grimoire_cache = None
+    with _grimoire_lock:
+        _grimoire_cache = None
     return load_grimoire()
 
 
@@ -251,8 +280,8 @@ def validate_grimoire() -> List[str]:
         else:
             seen_phrases.add(cmd["phrase"])
 
-        if "expansion" not in cmd and "shell_command" not in cmd:
-            issues.append(f"Command '{cmd.get('phrase', i)}': needs 'expansion' or 'shell_command'")
+        if "expansion" not in cmd:
+            issues.append(f"Command '{cmd.get('phrase', i)}': missing 'expansion'")
 
     # Check modifiers
     seen_mod_phrases = set()
@@ -273,7 +302,6 @@ def validate_grimoire() -> List[str]:
 # === CLI for testing ===
 
 if __name__ == "__main__":
-    import sys
 
     # Validate grimoire first
     issues = validate_grimoire()
@@ -317,9 +345,9 @@ if __name__ == "__main__":
             print(f"  → Expansion: {preview}...")
 
             if command.get("confirmation"):
-                print(f"  ⚠️  Requires confirmation")
+                print("  ⚠️  Requires confirmation")
         else:
-            print(f"  → NO MATCH")
+            print("  → NO MATCH")
 
     print("\n" + "=" * 60)
     print(f"Total commands: {len(list_commands())}")

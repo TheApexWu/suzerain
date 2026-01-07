@@ -543,7 +543,7 @@ if __name__ == "__main__":
             print(f"Config file: {config.config_path}")
             print(f"  Exists: {config.config_exists}")
             print(f"  Loaded from file: {config.loaded_from_file}")
-            print(f"\nSettings:")
+            print("\nSettings:")
             print(f"  deepgram.api_key: {'set' if config.deepgram_api_key else 'not set'}")
             print(f"  picovoice.access_key: {'set' if config.picovoice_access_key else 'not set'}")
             print(f"  parser.threshold: {config.parser_threshold}")

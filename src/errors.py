@@ -16,7 +16,7 @@ import os
 import re
 import time
 from enum import IntEnum
-from typing import Callable, Optional, TypeVar, Any
+from typing import Callable, Optional, TypeVar
 
 # Configure logging
 logger = logging.getLogger(__name__)

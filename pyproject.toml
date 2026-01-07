@@ -41,11 +41,19 @@ dev = [
 ]
 
 [project.scripts]
-suzerain = "src.main:main"
+suzerain = "main:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["main", "parser", "errors", "history", "cache", "config", "context", "session", "metrics", "resilience", "logger", "utils", "audio_feedback", "wake_word"]
+packages = ["grimoire"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+grimoire = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

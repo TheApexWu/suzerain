@@ -11,11 +11,10 @@ This module handles:
 """
 
 import json
-import os
 import re
 import time
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, List
 
 
 # Default session storage location
@@ -360,7 +359,6 @@ def reset_manager() -> None:
 # === CLI for testing ===
 
 if __name__ == "__main__":
-    import sys
 
     manager = get_manager()
 

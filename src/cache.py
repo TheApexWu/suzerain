@@ -47,7 +47,6 @@ import time
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Optional, Dict, Any
 from functools import lru_cache
 
@@ -64,7 +63,7 @@ def verify_grimoire_cache():
     Returns:
         Dict with cache status info
     """
-    from parser import _grimoire_cache, load_grimoire, reload_grimoire
+    from .parser import load_grimoire
 
     # First call - should populate cache
     start = time.perf_counter()

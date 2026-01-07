@@ -126,7 +126,7 @@ def _looks_like_path(content: str) -> bool:
     # Common path patterns
     if content.startswith(('/', '~/', './', '../')):
         return True
-    if os.path.sep in content and not ' ' in content[:20]:
+    if os.path.sep in content and ' ' not in content[:20]:
         return True
     # Windows paths
     if len(content) > 2 and content[1] == ':' and content[2] in ('\\', '/'):
@@ -168,10 +168,8 @@ def _looks_like_code(content: str) -> bool:
     if len(lines) > 0 and code_line_count / len(lines) > 0.3:
         return True
 
-    # Check for balanced braces/brackets (common in code)
+    # Check for balanced braces (common in code)
     brace_count = content.count('{') + content.count('}')
-    bracket_count = content.count('[') + content.count(']')
-    paren_count = content.count('(') + content.count(')')
 
     if brace_count >= 4 and abs(content.count('{') - content.count('}')) <= 1:
         return True

@@ -6,8 +6,6 @@ and replay. Provides query functions for retrieving past commands.
 """
 
 import json
-import os
-import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, date
 from pathlib import Path

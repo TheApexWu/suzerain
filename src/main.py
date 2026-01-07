@@ -27,7 +27,6 @@ import urllib.request
 from pathlib import Path
 
 from parser import (
-    match,
     match_top_n,
     extract_modifiers,
     expand_command,
@@ -42,12 +41,14 @@ from history import (
     get_last_n,
     get_last_successful,
     get_time_since_last,
-    format_history_entry,
-    display_history,
-    get_history
+    display_history
 )
 from metrics import get_metrics_manager
 from cache import warmup_all, verify_grimoire_cache
+from errors import (
+    ErrorCode,
+    redact_sensitive
+)
 
 
 # === Terminal Colors ===
@@ -98,6 +99,10 @@ RETRY_ENABLED = True
 
 # Global warm mode flag
 WARM_MODE = False
+
+# Claude execution timeout settings
+CLAUDE_TIMEOUT_SECONDS = 300  # 5 minutes default
+CLAUDE_WARNING_SECONDS = 30   # Show warning after 30s of no output
 
 
 # === Timing Utilities ===
@@ -546,7 +551,6 @@ def startup_warmup(show_progress: bool = True):
 
     if show_progress:
         # Show compact warmup summary
-        grimoire_ok = results.get("grimoire", {}).get("cache_working", False)
         claude_result = results.get("claude", {})
 
         if WARM_MODE and claude_result:
@@ -633,6 +637,7 @@ def ping(freq: int = 800, duration_ms: int = 100):
 
     try:
         import numpy as np
+        import simpleaudio
         sample_rate = 44100
         t = np.linspace(0, duration_ms/1000, int(sample_rate * duration_ms/1000), False)
         wave = np.sin(2 * np.pi * freq * t) * 0.3
@@ -685,16 +690,6 @@ def get_grimoire_keywords() -> str:
     return keyword_str
 
 
-def _redact_sensitive(text: str, api_key: str) -> str:
-    """Redact API key and other sensitive data from error messages."""
-    if api_key:
-        text = text.replace(api_key, "[REDACTED]")
-    # Also redact partial key matches (in case of truncation)
-    if api_key and len(api_key) > 8:
-        text = text.replace(api_key[:8], "[REDACTED]")
-    return text
-
-
 def _validate_api_key(api_key: str) -> bool:
     """Basic validation that API key looks plausible."""
     if not api_key:
@@ -715,17 +710,17 @@ def transcribe_audio(audio_data: bytes) -> str:
     """
     api_key = os.environ.get("DEEPGRAM_API_KEY")
     if not api_key:
-        print(f"{Colors.RED}Error: DEEPGRAM_API_KEY not set{Colors.RESET}")
+        print(f"{Colors.RED}[E{ErrorCode.STT_NO_API_KEY}] DEEPGRAM_API_KEY not set{Colors.RESET}")
+        print(f"{Colors.DIM}  Run: export DEEPGRAM_API_KEY='your-key-here'{Colors.RESET}")
+        print(f"{Colors.DIM}  Get a key at: https://console.deepgram.com{Colors.RESET}")
         return ""
 
     if not _validate_api_key(api_key):
-        print(f"{Colors.RED}Error: DEEPGRAM_API_KEY appears invalid (check format){Colors.RESET}")
+        print(f"{Colors.RED}[E{ErrorCode.STT_INVALID_API_KEY}] DEEPGRAM_API_KEY appears invalid{Colors.RESET}")
+        print(f"{Colors.DIM}  Keys should be 32+ alphanumeric characters{Colors.RESET}")
         return ""
 
-    # Base URL with model and formatting
     url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
-
-    # Add keyword boosting for grimoire terms
     keywords = get_grimoire_keywords()
     if keywords:
         url += f"&keywords={keywords}"
@@ -742,18 +737,20 @@ def transcribe_audio(audio_data: bytes) -> str:
             transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
             return transcript
     except urllib.error.HTTPError as e:
-        # HTTP errors might contain auth info in headers - redact
-        error_msg = _redact_sensitive(str(e), api_key)
-        print(f"{Colors.RED}Transcription HTTP error: {error_msg}{Colors.RESET}")
+        error_msg = redact_sensitive(str(e), api_key)
+        if e.code in (401, 403):
+            print(f"{Colors.RED}[E{ErrorCode.STT_INVALID_API_KEY}] Authentication failed{Colors.RESET}")
+            print(f"{Colors.DIM}  Check your DEEPGRAM_API_KEY is valid and not expired{Colors.RESET}")
+        else:
+            print(f"{Colors.RED}[E{ErrorCode.STT_NETWORK_ERROR}] Deepgram error (HTTP {e.code}){Colors.RESET}")
         return ""
     except urllib.error.URLError as e:
-        # URL errors are usually network issues, less likely to leak
-        print(f"{Colors.RED}Transcription network error: {e.reason}{Colors.RESET}")
+        print(f"{Colors.RED}[E{ErrorCode.NETWORK_UNREACHABLE}] Network error: {e.reason}{Colors.RESET}")
+        print(f"{Colors.DIM}  Check your internet connection{Colors.RESET}")
         return ""
     except Exception as e:
-        # Generic fallback - always redact
-        error_msg = _redact_sensitive(str(e), api_key)
-        print(f"{Colors.RED}Transcription error: {error_msg}{Colors.RESET}")
+        error_msg = redact_sensitive(str(e), api_key)
+        print(f"{Colors.RED}[E{ErrorCode.STT_TRANSCRIPTION_FAILED}] Transcription failed: {error_msg}{Colors.RESET}")
         return ""
 
 
@@ -807,15 +804,18 @@ def _transcribe_audio_single(audio_data: bytes) -> str:
     """
     api_key = os.environ.get("DEEPGRAM_API_KEY")
     if not api_key:
-        raise TranscriptionError("DEEPGRAM_API_KEY not set", is_retryable=False)
+        raise TranscriptionError(
+            f"[E{ErrorCode.STT_NO_API_KEY}] DEEPGRAM_API_KEY not set",
+            is_retryable=False
+        )
 
     if not _validate_api_key(api_key):
-        raise TranscriptionError("DEEPGRAM_API_KEY appears invalid", is_retryable=False)
+        raise TranscriptionError(
+            f"[E{ErrorCode.STT_INVALID_API_KEY}] Invalid API key format",
+            is_retryable=False
+        )
 
-    # Base URL with model and formatting
     url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
-
-    # Add keyword boosting for grimoire terms
     keywords = get_grimoire_keywords()
     if keywords:
         url += f"&keywords={keywords}"
@@ -833,20 +833,37 @@ def _transcribe_audio_single(audio_data: bytes) -> str:
             return transcript
     except urllib.error.HTTPError as e:
         is_retryable = _is_retryable_error(e)
-        if e.code == 401 or e.code == 403:
-            raise TranscriptionError("Authentication failed - check your API key", is_retryable=False)
+        if e.code in (401, 403):
+            raise TranscriptionError(
+                f"[E{ErrorCode.STT_INVALID_API_KEY}] Authentication failed",
+                is_retryable=False
+            )
         elif e.code == 429:
-            raise TranscriptionError("Rate limit exceeded", is_retryable=True)
+            raise TranscriptionError(
+                f"[E{ErrorCode.NETWORK_RATE_LIMITED}] Rate limit exceeded",
+                is_retryable=True
+            )
         else:
-            raise TranscriptionError(f"Service error (code {e.code})", is_retryable=is_retryable)
+            raise TranscriptionError(
+                f"[E{ErrorCode.STT_NETWORK_ERROR}] Service error (HTTP {e.code})",
+                is_retryable=is_retryable
+            )
     except urllib.error.URLError as e:
         is_retryable = _is_retryable_error(e)
-        raise TranscriptionError("Connection failed", is_retryable=is_retryable)
+        raise TranscriptionError(
+            f"[E{ErrorCode.NETWORK_UNREACHABLE}] Connection failed",
+            is_retryable=is_retryable
+        )
     except TimeoutError:
-        raise TranscriptionError("Request timed out", is_retryable=True)
-    except Exception as e:
-        is_retryable = _is_retryable_error(e)
-        raise TranscriptionError("Transcription failed", is_retryable=is_retryable)
+        raise TranscriptionError(
+            f"[E{ErrorCode.STT_TIMEOUT}] Request timed out",
+            is_retryable=True
+        )
+    except Exception:
+        raise TranscriptionError(
+            f"[E{ErrorCode.STT_TRANSCRIPTION_FAILED}] Transcription failed",
+            is_retryable=False
+        )
 
 
 def transcribe_audio_with_retry(audio_data: bytes) -> tuple[str, bool]:
@@ -868,16 +885,12 @@ def transcribe_audio_with_retry(audio_data: bytes) -> tuple[str, bool]:
     max_attempts = 3
     delays = [0.5, 1.0, 2.0]  # Exponential backoff
 
-    last_error = None
-
     for attempt in range(max_attempts):
         try:
             transcript = _transcribe_audio_single(audio_data)
             return (transcript, True)
 
         except TranscriptionError as e:
-            last_error = e
-
             # Don't retry non-retryable errors
             if not e.is_retryable:
                 print(f"{Colors.RED}Transcription failed: {e}{Colors.RESET}")
@@ -899,6 +912,42 @@ def transcribe_audio_with_retry(audio_data: bytes) -> tuple[str, bool]:
 
 
 # === Command Execution ===
+
+def _handle_claude_output_line(line: str, output_handler: 'StreamingOutputHandler'):
+    """Parse and handle a single line of Claude JSON stream output."""
+    try:
+        data = json.loads(line)
+        msg_type = data.get("type")
+
+        # Handle assistant messages (with enhanced display)
+        if msg_type == "assistant":
+            output_handler.handle_assistant(data)
+
+        # Handle content blocks (character-by-character streaming)
+        elif msg_type == "content_block_delta":
+            output_handler.handle_content_delta(data)
+
+        # Handle tool use (show what Claude is doing with context)
+        elif msg_type == "tool_use":
+            output_handler.handle_tool_use(data)
+
+        # Handle result - also capture conversation_id
+        elif msg_type == "result":
+            output_handler.handle_result(data)
+
+        # Also look for session info in system messages
+        elif msg_type == "system":
+            output_handler.handle_system(data)
+
+        # Handle error messages
+        elif msg_type == "error":
+            output_handler.handle_error(data)
+
+    except json.JSONDecodeError:
+        # Not JSON, print raw (might be error message)
+        output_handler.stop_waiting()
+        print(f"{Colors.YELLOW}{line}{Colors.RESET}")
+
 
 def disambiguate(matches: list) -> tuple:
     """
@@ -1014,6 +1063,11 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
     # Start waiting spinner
     output_handler.start_waiting()
 
+    # Track time for timeout and warnings
+    last_output_time = time.perf_counter()
+    warning_shown = False
+    timeout_reached = False
+
     # Stream output from Claude
     try:
         process = subprocess.Popen(
@@ -1023,46 +1077,80 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
             text=True
         )
 
-        for line in process.stdout:
-            line = line.strip()
-            if not line:
-                continue
+        # Use select for non-blocking reads with timeout checking
+        import select
+        import os as os_module
 
-            # Parse JSON stream for clean output
-            try:
-                data = json.loads(line)
-                msg_type = data.get("type")
+        # Make stdout non-blocking on Unix-like systems
+        use_select = False
+        try:
+            fd = process.stdout.fileno()
+            import fcntl
+            fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, fl | os_module.O_NONBLOCK)
+            use_select = True
+        except (ImportError, OSError, AttributeError):
+            # Windows, unsupported, or mock - fall back to blocking reads
+            use_select = False
 
-                # Handle assistant messages (with enhanced display)
-                if msg_type == "assistant":
-                    output_handler.handle_assistant(data)
+        while True:
+            # Check for timeout
+            current_time = time.perf_counter()
+            elapsed_since_output = current_time - last_output_time
+            total_elapsed = current_time - start_time
 
-                # Handle content blocks (character-by-character streaming)
-                elif msg_type == "content_block_delta":
-                    output_handler.handle_content_delta(data)
-
-                # Handle tool use (show what Claude is doing with context)
-                elif msg_type == "tool_use":
-                    output_handler.handle_tool_use(data)
-
-                # Handle result - also capture conversation_id
-                elif msg_type == "result":
-                    output_handler.handle_result(data)
-
-                # Also look for session info in system messages
-                elif msg_type == "system":
-                    output_handler.handle_system(data)
-
-                # Handle error messages
-                elif msg_type == "error":
-                    output_handler.handle_error(data)
-
-            except json.JSONDecodeError:
-                # Not JSON, print raw (might be error message)
+            # Show warning after CLAUDE_WARNING_SECONDS of no output
+            if not warning_shown and elapsed_since_output >= CLAUDE_WARNING_SECONDS:
                 output_handler.stop_waiting()
-                print(f"{Colors.YELLOW}{line}{Colors.RESET}")
+                print(f"\n{Colors.YELLOW}[Warning] No output for {int(elapsed_since_output)}s. Press Ctrl+C to cancel.{Colors.RESET}")
+                warning_shown = True
 
-        process.wait()
+            # Check total timeout
+            if total_elapsed >= CLAUDE_TIMEOUT_SECONDS:
+                output_handler.stop_waiting()
+                print(f"\n{Colors.RED}[Timeout] Claude execution timed out after {int(total_elapsed)}s.{Colors.RESET}")
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                timeout_reached = True
+                break
+
+            # Check if process has finished
+            if process.poll() is not None:
+                # Process finished - read any remaining output
+                for line in process.stdout:
+                    line = line.strip()
+                    if line:
+                        _handle_claude_output_line(line, output_handler)
+                break
+
+            # Try to read output
+            if use_select:
+                ready, _, _ = select.select([process.stdout], [], [], 1.0)
+                if ready:
+                    line = process.stdout.readline()
+                    if line:
+                        line = line.strip()
+                        if line:
+                            _handle_claude_output_line(line, output_handler)
+                            last_output_time = time.perf_counter()
+                            warning_shown = False  # Reset warning on new output
+            else:
+                # Blocking read with periodic checks
+                line = process.stdout.readline()
+                if line:
+                    line = line.strip()
+                    if line:
+                        _handle_claude_output_line(line, output_handler)
+                        last_output_time = time.perf_counter()
+                        warning_shown = False
+                elif process.poll() is not None:
+                    break
+
+        if not timeout_reached:
+            process.wait()
 
         # Stop Claude timer
         if claude_timer:
@@ -1076,11 +1164,19 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
 
         print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
 
+        # Determine success status
+        if timeout_reached:
+            success = False
+            return_code = 124  # Standard timeout exit code (same as GNU timeout)
+        else:
+            success = process.returncode == 0
+            return_code = process.returncode
+
         # Show enhanced summary with tool count
-        summary = output_handler.get_summary(elapsed_seconds, process.returncode == 0)
+        summary = output_handler.get_summary(elapsed_seconds, success)
         print(summary)
 
-        if process.returncode == 0:
+        if success:
             ping_success()
         else:
             ping_error()
@@ -1090,15 +1186,24 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
             timing_report.record_to_metrics()
             timing_report.display()  # Full breakdown if TIMING_MODE
 
-        return (process.returncode, conversation_id)
+        return (return_code, conversation_id)
 
     except FileNotFoundError:
         output_handler.stop_waiting()
-        print(f"{Colors.RED}Error: 'claude' command not found. Is Claude Code installed?{Colors.RESET}")
+        print(f"{Colors.RED}[E{ErrorCode.CLAUDE_NOT_FOUND}] 'claude' command not found{Colors.RESET}")
+        print(f"{Colors.DIM}  Install: npm install -g @anthropic-ai/claude-code{Colors.RESET}")
+        print(f"{Colors.DIM}  Then restart your terminal{Colors.RESET}")
         ping_error()
         return (1, None)
     except KeyboardInterrupt:
         output_handler.stop_waiting()
+        # Gracefully terminate the process
+        if 'process' in locals() and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
         print(f"\n\n{Colors.YELLOW}Interrupted.{Colors.RESET}")
         return (130, None)
 
@@ -1232,7 +1337,8 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
         return process.returncode
 
     except FileNotFoundError:
-        print(f"{Colors.RED}Error: 'claude' command not found. Is Claude Code installed?{Colors.RESET}")
+        print(f"{Colors.RED}[E{ErrorCode.CLAUDE_NOT_FOUND}] 'claude' command not found{Colors.RESET}")
+        print(f"{Colors.DIM}  Install: npm install -g @anthropic-ai/claude-code{Colors.RESET}")
         ping_error()
         return 1
     except KeyboardInterrupt:
@@ -1575,7 +1681,7 @@ def show_commands():
         if cmd['tags']:
             print(f"    Tags: {cmd['tags']}")
         if cmd['requires_confirmation']:
-            print(f"    ⚠️  Requires confirmation")
+            print("    ⚠️  Requires confirmation")
 
     print("\n" + "-" * 50)
     print("MODIFIERS (append to any command)")
@@ -1598,7 +1704,7 @@ def validate_mode():
     else:
         commands = list_commands()
         modifiers = list_modifiers()
-        print(f"\n✓ Grimoire valid")
+        print("\n✓ Grimoire valid")
         print(f"  {len(commands)} commands")
         print(f"  {len(modifiers)} modifiers")
         return 0
@@ -1684,6 +1790,16 @@ def main():
 
     args = parser.parse_args()
 
+    # Set global flags FIRST (before any early exits)
+    global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE
+    SANDBOX_MODE = args.sandbox
+    TIMING_MODE = args.timing
+    WARM_MODE = args.warm
+    if args.no_retry:
+        RETRY_ENABLED = False
+    if args.no_fallback:
+        FALLBACK_ENABLED = False
+
     if args.validate:
         sys.exit(validate_mode())
 
@@ -1698,28 +1814,6 @@ def main():
     if args.list:
         show_commands()
         return
-
-    # Set global sandbox mode
-    global SANDBOX_MODE
-    SANDBOX_MODE = args.sandbox
-
-    # Set global timing mode
-    global TIMING_MODE
-    TIMING_MODE = args.timing
-
-    # Set global retry mode
-    global RETRY_ENABLED
-    if args.no_retry:
-        RETRY_ENABLED = False
-
-    # Set global fallback mode
-    global FALLBACK_ENABLED
-    if args.no_fallback:
-        FALLBACK_ENABLED = False
-
-    # Set global warm mode
-    global WARM_MODE
-    WARM_MODE = args.warm
 
     if args.timing:
         print(f"{Colors.CYAN}{'=' * 50}{Colors.RESET}")

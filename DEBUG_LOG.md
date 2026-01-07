@@ -189,6 +189,58 @@ cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", 
 
 ---
 
+## 2026-01-07
+
+### Session Summary: Test Fixes, Code Cleanup, PyPI Release
+
+**Started with**: 26 failing tests from manual run
+
+**Achieved**:
+
+1. **Fixed 26 Failing Tests**
+   - `test_grimoire_has_5_modifiers` → updated to expect 8 modifiers
+   - Fixed `'list_iterator' object has no attribute 'fileno'` (20+ tests)
+     - Created `tests/helpers.py` with `MockStdout` class
+     - Fixed `src/main.py` to catch `OSError` from `fileno()` in try block
+   - Fixed CLI argument flag tests (SANDBOX_MODE, TIMING_MODE, etc.)
+     - Moved global flag setting before early exits in `main()`
+   - Fixed `test_timeout_returns_exit_code_124`
+     - Changed `fileno()` to raise `OSError` instead of returning -1
+   - Fixed `test_execute_keyboard_interrupt` - added missing `poll()` method
+
+2. **Error Message Polish**
+   - Imported structured error system from `errors.py`
+   - Updated all error messages to use `ErrorCode` enum
+   - Added actionable suggestions (install commands, links)
+   - Removed duplicate `_redact_sensitive()` function (now using `errors.redact_sensitive`)
+
+3. **Code Cleanup with Ruff**
+   - Ran `ruff check src/ --fix`
+   - Fixed 28 lint issues:
+     - Removed unused imports
+     - Removed unused variables
+     - Fixed f-strings without placeholders
+     - Added missing `import simpleaudio` in `ping()` function
+
+4. **PyPI Package Release**
+   - Fixed `pyproject.toml` for proper package discovery:
+     ```toml
+     [tool.setuptools]
+     py-modules = ["main", "parser", ...]
+     packages = ["grimoire"]
+     package-dir = {"" = "src"}
+     ```
+   - Copied grimoire to `src/grimoire/` for package inclusion
+   - Updated `parser.py` to find grimoire in both installed and dev locations
+   - Built and uploaded to PyPI: https://pypi.org/project/suzerain/0.1.0/
+
+**Final State**:
+- 587 tests passing, 2 skipped
+- 0 ruff lint errors
+- Package live on PyPI: `pip install suzerain`
+
+---
+
 ## Environment Info
 
 - **OS**: macOS Darwin 24.6.0 (Apple Silicon)
@@ -196,3 +248,4 @@ cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", 
 - **PyAudio**: 0.2.14
 - **Deepgram**: API (Nova-2)
 - **Claude Code**: CLI installed via npm
+- **Suzerain**: v0.1.0 on PyPI
