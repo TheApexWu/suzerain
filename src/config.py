@@ -36,6 +36,9 @@ DEFAULT_CONFIG = {
     "grimoire": {
         "file": "vanilla.yaml",  # Default to simple mode
     },
+    "context": {
+        "project_path": None,  # Sticky project context - all commands run here
+    },
     "parser": {
         "threshold": 80,
         "scorer": "ratio",
@@ -453,6 +456,32 @@ class Config:
     def grimoire_file(self) -> str:
         """Get selected grimoire file."""
         return self.get("grimoire", "file")
+
+    @property
+    def project_path(self) -> Optional[str]:
+        """Get sticky project context path."""
+        return self.get("context", "project_path")
+
+    def set_project_path(self, path: str) -> None:
+        """Set sticky project context path and save to config."""
+        # Expand and resolve the path
+        resolved = Path(path).expanduser().resolve()
+        if not resolved.exists():
+            raise ValueError(f"Path does not exist: {resolved}")
+        if not resolved.is_dir():
+            raise ValueError(f"Path is not a directory: {resolved}")
+
+        # Update config
+        if "context" not in self._config:
+            self._config["context"] = {}
+        self._config["context"]["project_path"] = str(resolved)
+        self.save()
+
+    def clear_project_path(self) -> None:
+        """Clear the sticky project context."""
+        if "context" in self._config:
+            self._config["context"]["project_path"] = None
+            self.save()
 
     def __repr__(self) -> str:
         """String representation."""

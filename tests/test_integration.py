@@ -402,7 +402,7 @@ class TestCLITestModeIntegration:
         input_phrase = "the judge smiled\n"
 
         result = subprocess.run(
-            [sys.executable, main_script, "--test", "--sandbox", "--once"],
+            [sys.executable, main_script, "--test", "--sandbox", "--once", "--no-warm", "--no-streaming"],
             input=input_phrase,
             capture_output=True,
             text=True,
@@ -418,7 +418,7 @@ class TestCLITestModeIntegration:
     def test_test_mode_quit_command(self, main_script):
         """Test that 'quit' exits test mode cleanly."""
         result = subprocess.run(
-            [sys.executable, main_script, "--test", "--sandbox"],
+            [sys.executable, main_script, "--test", "--sandbox", "--no-warm", "--no-streaming"],
             input="quit\n",
             capture_output=True,
             text=True,
@@ -431,7 +431,7 @@ class TestCLITestModeIntegration:
     def test_test_mode_list_command(self, main_script):
         """Test that 'list' shows commands in test mode."""
         result = subprocess.run(
-            [sys.executable, main_script, "--test", "--sandbox"],
+            [sys.executable, main_script, "--test", "--sandbox", "--no-warm", "--no-streaming"],
             input="list\nquit\n",
             capture_output=True,
             text=True,
@@ -461,7 +461,7 @@ class TestDryRunIntegration:
         input_phrase = "the evening redness in the west\nquit\n"
 
         result = subprocess.run(
-            [sys.executable, main_script, "--test", "--sandbox"],
+            [sys.executable, main_script, "--test", "--sandbox", "--no-warm", "--no-streaming"],
             input=input_phrase,
             capture_output=True,
             text=True,
@@ -487,7 +487,7 @@ class TestDryRunIntegration:
         input_phrase = "the judge smiled\nquit\n"
 
         result = subprocess.run(
-            [sys.executable, main_script, "--test", "--sandbox"],
+            [sys.executable, main_script, "--test", "--sandbox", "--no-warm", "--no-streaming"],
             input=input_phrase,
             capture_output=True,
             text=True,
@@ -507,7 +507,7 @@ class TestDryRunIntegration:
             input_text = f"{phrase}\nquit\n"
 
             result = subprocess.run(
-                [sys.executable, main_script, "--test", "--sandbox"],
+                [sys.executable, main_script, "--test", "--sandbox", "--no-warm", "--no-streaming"],
                 input=input_text,
                 capture_output=True,
                 text=True,
@@ -551,7 +551,7 @@ class TestErrorHandlingIntegration:
         input_phrase = "random nonsense that wont match anything xyz123\nn\nquit\n"
 
         result = subprocess.run(
-            [sys.executable, main_script, "--test", "--sandbox"],
+            [sys.executable, main_script, "--test", "--sandbox", "--no-warm", "--no-streaming"],
             input=input_phrase,
             capture_output=True,
             text=True,

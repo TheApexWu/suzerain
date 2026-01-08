@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import subprocess
 import sys
 import os
@@ -27,7 +28,7 @@ import urllib.request
 from pathlib import Path
 
 from parser import (
-    match_top_n,
+    match_top_n as fuzzy_match_top_n,
     extract_modifiers,
     expand_command,
     load_grimoire,
@@ -36,6 +37,42 @@ from parser import (
     validate_grimoire,
     get_command_info
 )
+
+# Lazy imports for optional modules
+_semantic_parser = None
+_streaming_stt = None
+
+
+def _get_semantic_parser():
+    """Lazy load semantic parser (avoids 20s startup when not needed)."""
+    global _semantic_parser
+    if _semantic_parser is None:
+        import semantic_parser
+        _semantic_parser = semantic_parser
+    return _semantic_parser
+
+
+def _get_streaming_stt():
+    """Lazy load streaming STT module."""
+    global _streaming_stt
+    if _streaming_stt is None:
+        import streaming_stt
+        _streaming_stt = streaming_stt
+    return _streaming_stt
+
+
+def match_top_n(text: str, n: int = 3):
+    """
+    Match text against grimoire using configured matcher.
+
+    Uses semantic matching (sentence-transformers) when --semantic flag is set,
+    otherwise uses fuzzy string matching (RapidFuzz).
+    """
+    if SEMANTIC_MODE:
+        return _get_semantic_parser().match_top_n(text, n=n)
+    return fuzzy_match_top_n(text, n=n)
+
+
 from history import (
     log_command as log_history,
     get_last_n,
@@ -48,6 +85,14 @@ from cache import warmup_all, verify_grimoire_cache
 from errors import (
     ErrorCode,
     redact_sensitive
+)
+
+from orchestrator import (
+    Orchestrator,
+    CommandContext,
+    PermissionTier,
+    categorize_command,
+    determine_tier,
 )
 
 
@@ -106,8 +151,20 @@ RETRY_ENABLED = True
 # Recording duration in seconds
 RECORD_SECONDS = 6
 
-# Global warm mode flag
-WARM_MODE = False
+# Global warm mode flag (default: True - pre-warm Claude connection for faster first command)
+WARM_MODE = True
+
+# Global semantic mode flag (use sentence-transformers instead of fuzzy match)
+SEMANTIC_MODE = False
+
+# Global streaming STT mode flag (default: True - WebSocket streaming for lower latency)
+STREAMING_STT_MODE = True
+
+# Global SDK mode flag (default: False until fully tested)
+# When True, uses the orchestrator with specialized subagents
+# When False, falls back to subprocess.Popen("claude -p ...")
+# Enable with --sdk flag to test the new architecture
+SDK_MODE = False
 
 # Claude execution timeout settings
 CLAUDE_TIMEOUT_SECONDS = 300  # 5 minutes default
@@ -214,9 +271,8 @@ try:
 except ImportError:
     AUDIO_AVAILABLE = False
 
-# simpleaudio disabled - crashes on macOS Apple Silicon
-# TODO: Replace with alternative (e.g., sounddevice, pygame.mixer)
-AUDIO_FEEDBACK = False
+# Audio feedback enabled - using afplay instead of simpleaudio (which crashes on Apple Silicon)
+AUDIO_FEEDBACK = True
 
 
 # === Spinner for Waiting ===
@@ -532,14 +588,19 @@ def startup_warmup(show_progress: bool = True):
     1. Verify grimoire cache
     2. Warm Deepgram connection
     3. Optionally warm Claude connection (if --warm flag)
+    4. Optionally preload semantic model (if --semantic flag)
     """
     if show_progress:
-        print(f"{Colors.DIM}Warming up...{Colors.RESET}", end=" ", flush=True)
+        if SEMANTIC_MODE:
+            print(f"{Colors.DIM}Loading semantic model...{Colors.RESET}", end=" ", flush=True)
+        else:
+            print(f"{Colors.DIM}Warming up...{Colors.RESET}", end=" ", flush=True)
 
     results = {}
 
     # Use ThreadPoolExecutor for parallel warmup
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    max_workers = 4 if SEMANTIC_MODE else 3
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all warmup tasks
         futures = {
             executor.submit(verify_grimoire_cache): "grimoire",
@@ -550,8 +611,17 @@ def startup_warmup(show_progress: bool = True):
         if WARM_MODE:
             futures[executor.submit(warm_claude_connection)] = "claude"
 
-        # Collect results as they complete
-        for future in concurrent.futures.as_completed(futures, timeout=35):
+        # Add semantic model preload if enabled
+        if SEMANTIC_MODE:
+            def preload_semantic():
+                parser = _get_semantic_parser()
+                parser.preload()
+                return {"success": True}
+            futures[executor.submit(preload_semantic)] = "semantic"
+
+        # Collect results as they complete (longer timeout for semantic)
+        timeout = 60 if SEMANTIC_MODE else 35
+        for future in concurrent.futures.as_completed(futures, timeout=timeout):
             name = futures[future]
             try:
                 results[name] = future.result()
@@ -561,13 +631,24 @@ def startup_warmup(show_progress: bool = True):
     if show_progress:
         # Show compact warmup summary
         claude_result = results.get("claude", {})
+        semantic_result = results.get("semantic", {})
+
+        parts = []
+        if SEMANTIC_MODE and semantic_result:
+            if semantic_result.get("success"):
+                parts.append(f"{Colors.GREEN}Semantic ready{Colors.RESET}")
+            else:
+                parts.append(f"{Colors.YELLOW}Semantic: {semantic_result.get('error', 'failed')}{Colors.RESET}")
 
         if WARM_MODE and claude_result:
             claude_ms = claude_result.get("latency_ms", 0)
             if claude_result.get("success"):
-                print(f"{Colors.GREEN}Claude ready{Colors.RESET} ({claude_ms:.0f}ms)")
+                parts.append(f"Claude ready ({claude_ms:.0f}ms)")
             else:
-                print(f"{Colors.YELLOW}Claude warmup: {claude_result.get('error', 'failed')}{Colors.RESET}")
+                parts.append(f"Claude: {claude_result.get('error', 'failed')}")
+
+        if parts:
+            print(" | ".join(parts))
         else:
             print(f"{Colors.GREEN}Ready{Colors.RESET}")
 
@@ -638,39 +719,54 @@ def play_retry_sound():
 
 
 # === Audio Feedback ===
+# Using macOS afplay with system sounds instead of simpleaudio (which crashes on Apple Silicon)
 
-def ping(freq: int = 800, duration_ms: int = 100):
-    """Play a confirmation tone."""
+def _play_system_sound(sounds: list[str]) -> bool:
+    """
+    Play first available system sound using afplay.
+    Returns True if sound was played, False otherwise.
+    """
     if not AUDIO_FEEDBACK:
-        return
+        return False
 
     try:
-        import numpy as np
-        import simpleaudio
-        sample_rate = 44100
-        t = np.linspace(0, duration_ms/1000, int(sample_rate * duration_ms/1000), False)
-        wave = np.sin(2 * np.pi * freq * t) * 0.3
-        audio = (wave * 32767).astype(np.int16)
-        play_obj = simpleaudio.play_buffer(audio, 1, 2, sample_rate)
-        play_obj.wait_done()
+        for sound in sounds:
+            if os.path.exists(sound):
+                subprocess.Popen(
+                    ["afplay", sound],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                return True
     except Exception:
-        pass  # Silent fail for audio feedback
+        pass
+    return False
 
 
 def ping_heard():
-    """Low tone - 'I heard you'"""
-    ping(400, 100)
+    """Subtle sound - 'I heard you'"""
+    _play_system_sound([
+        "/System/Library/Sounds/Tink.aiff",
+        "/System/Library/Sounds/Pop.aiff",
+    ])
 
 
 def ping_success():
-    """High tone - 'Success'"""
-    ping(800, 150)
+    """Positive sound - 'Success'"""
+    _play_system_sound([
+        "/System/Library/Sounds/Glass.aiff",
+        "/System/Library/Sounds/Ping.aiff",
+        "/System/Library/Sounds/Pop.aiff",
+    ])
 
 
 def ping_error():
-    """Double low tone - 'Error'"""
-    ping(300, 100)
-    ping(300, 100)
+    """Negative sound - 'Error'"""
+    _play_system_sound([
+        "/System/Library/Sounds/Basso.aiff",
+        "/System/Library/Sounds/Sosumi.aiff",
+        "/System/Library/Sounds/Funk.aiff",
+    ])
 
 
 # === Speech-to-Text ===
@@ -991,6 +1087,100 @@ def disambiguate(matches: list) -> tuple:
     return None, None
 
 
+# === SDK Execution ===
+
+async def _execute_via_sdk(
+    prompt: str,
+    tags: list[str],
+    has_confirmation: bool,
+    project_path: str = None,
+    output_handler: 'StreamingOutputHandler' = None,
+) -> tuple[int, str | None]:
+    """
+    Execute a command via the Claude Agent SDK orchestrator.
+
+    Returns:
+        (return_code, conversation_id)
+    """
+    orchestrator = Orchestrator(dangerous_mode=DANGEROUS_MODE)
+
+    context = CommandContext(
+        prompt=prompt,
+        category=categorize_command(tags),
+        tier=determine_tier(tags, has_confirmation),
+        tags=tags,
+        project_path=project_path,
+    )
+
+    conversation_id = None
+    return_code = 0
+    tool_count = 0
+
+    try:
+        async for message in orchestrator.execute(context):
+            msg_type = message.get("type")
+
+            if msg_type == "routing":
+                agent = message.get("agent", "unknown")
+                tier = message.get("tier", "unknown")
+                print(f"{Colors.DIM}[Routing to {agent} agent (tier: {tier})]{Colors.RESET}")
+
+            elif msg_type == "text":
+                content = message.get("content", "")
+                if output_handler:
+                    output_handler.stop_waiting()
+                print(content, end="", flush=True)
+
+            elif msg_type == "tool_use":
+                tool = message.get("tool", "unknown")
+                tool_count += 1
+                if output_handler:
+                    output_handler.stop_waiting()
+                print(f"\n{Colors.DIM}[Using: {tool}]{Colors.RESET}", flush=True)
+
+            elif msg_type == "tool_result":
+                # Tool results are handled internally, just track
+                pass
+
+            elif msg_type == "result":
+                # Final result with cost/duration
+                cost = message.get("cost")
+                duration = message.get("duration")
+                if cost and TIMING_MODE:
+                    print(f"\n{Colors.DIM}[Cost: ${cost:.4f}]{Colors.RESET}")
+
+            elif msg_type == "error":
+                error_msg = message.get("message", "Unknown error")
+                print(f"\n{Colors.RED}[Error] {error_msg}{Colors.RESET}")
+                return_code = 1
+
+    except KeyboardInterrupt:
+        print(f"\n\n{Colors.YELLOW}Interrupted.{Colors.RESET}")
+        return (130, None)
+    except Exception as e:
+        print(f"\n{Colors.RED}[SDK Error] {e}{Colors.RESET}")
+        return_code = 1
+
+    return (return_code, conversation_id)
+
+
+def _execute_via_sdk_sync(
+    prompt: str,
+    tags: list[str],
+    has_confirmation: bool,
+    project_path: str = None,
+    output_handler: 'StreamingOutputHandler' = None,
+) -> tuple[int, str | None]:
+    """Synchronous wrapper for SDK execution."""
+    return asyncio.run(_execute_via_sdk(
+        prompt=prompt,
+        tags=tags,
+        has_confirmation=has_confirmation,
+        project_path=project_path,
+        output_handler=output_handler,
+    ))
+
+
 def execute_command(command: dict, modifiers: list, dry_run: bool = False, timing_report: TimingReport = None, phrase_spoken: str = None, score: float = None) -> tuple:
     """
     Execute a matched grimoire command.
@@ -1049,6 +1239,70 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
         print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
         return (0, None)
 
+    # Get project context (if set)
+    from config import get_config
+    project_path = get_config().project_path
+
+    # Get tags for routing
+    tags = info.get("tags", [])
+    has_confirmation = info.get("requires_confirmation", False)
+
+    # === SDK Mode: Use orchestrator with specialized subagents ===
+    if SDK_MODE and not info.get("use_continue"):  # SDK doesn't support --continue yet
+        # Immediate acknowledgment before execution
+        acknowledge_command()
+        print()  # Clean line before streaming
+
+        # Create streaming output handler
+        output_handler = StreamingOutputHandler()
+
+        # Start Claude execution timer
+        start_time = time.perf_counter()
+        claude_timer = None
+        if timing_report:
+            claude_timer = timing_report.timer("Claude Exec")
+            claude_timer.start()
+
+        # Start waiting spinner
+        output_handler.start_waiting()
+
+        # Execute via SDK
+        return_code, conversation_id = _execute_via_sdk_sync(
+            prompt=expansion,
+            tags=tags,
+            has_confirmation=has_confirmation,
+            project_path=project_path,
+            output_handler=output_handler,
+        )
+
+        # Stop timer and spinner
+        output_handler.stop_waiting()
+        if claude_timer:
+            claude_timer.stop()
+
+        # Calculate elapsed time
+        elapsed_seconds = time.perf_counter() - start_time
+
+        print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
+
+        # Show summary
+        success = return_code == 0
+        if success:
+            print(f"{Colors.GREEN}Complete{Colors.RESET} ({elapsed_seconds:.1f}s)")
+            ping_success()
+        else:
+            print(f"{Colors.RED}Failed{Colors.RESET} (exit code {return_code})")
+            ping_error()
+
+        # Record timing to metrics
+        if timing_report:
+            timing_report.record_to_metrics()
+            timing_report.display()
+
+        return (return_code, conversation_id)
+
+    # === Subprocess Mode: Fall back to claude CLI ===
+
     # Handle --continue flag
     if info.get("use_continue"):
         cmd = ["claude", "--continue", "-p", expansion, "--verbose", "--output-format", "stream-json"]
@@ -1087,7 +1341,8 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            cwd=project_path  # Run in project context (None = current dir)
         )
 
         # Use select for non-blocking reads with timeout checking
@@ -1285,13 +1540,18 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
         claude_timer = timing_report.timer("Claude Exec")
         claude_timer.start()
 
+    # Get project context (if set)
+    from config import get_config
+    project_path = get_config().project_path
+
     # Stream output from Claude
     try:
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            cwd=project_path  # Run in project context (None = current dir)
         )
 
         for line in process.stdout:
@@ -1404,6 +1664,15 @@ def test_mode():
 
     commands = list_commands()
     print(f"\n{Colors.CYAN}Loaded {len(commands)} incantations.{Colors.RESET}")
+
+    # Show project context
+    from config import get_config
+    ctx = get_config().project_path
+    if ctx:
+        print(f"{Colors.GREEN}Context:{Colors.RESET} {ctx}")
+    else:
+        print(f"{Colors.DIM}Context: (current directory){Colors.RESET}")
+
     print(f"{Colors.DIM}Try: \"the evening redness in the west and the judge watched\"{Colors.RESET}")
 
     while True:
@@ -1813,6 +2082,194 @@ def save_grimoire_choice(grimoire_file: str):
     reload_config()
 
 
+def run_setup_wizard():
+    """
+    Interactive setup wizard for first-time users.
+
+    Checks dependencies, prompts for API keys, tests the pipeline.
+    """
+    print(f"""
+{Colors.CYAN}╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║   {Colors.BOLD}SUZERAIN SETUP WIZARD{Colors.RESET}{Colors.CYAN}                               ║
+║   Let's get you configured                               ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝{Colors.RESET}
+""")
+
+    from config import get_config, CONFIG_DIR
+    config = get_config()
+    all_checks_passed = True
+
+    # === Step 1: Check Claude CLI ===
+    print(f"{Colors.BOLD}Step 1/4: Checking Claude CLI{Colors.RESET}")
+    print(f"{Colors.DIM}─────────────────────────────────────{Colors.RESET}")
+
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip().split('\n')[0]
+            print(f"  {Colors.GREEN}✓{Colors.RESET} Claude CLI installed: {version}")
+        else:
+            print(f"  {Colors.RED}✗{Colors.RESET} Claude CLI not working")
+            print(f"    {Colors.DIM}Install: npm install -g @anthropic-ai/claude-code{Colors.RESET}")
+            all_checks_passed = False
+    except FileNotFoundError:
+        print(f"  {Colors.RED}✗{Colors.RESET} Claude CLI not found")
+        print(f"    {Colors.DIM}Install: npm install -g @anthropic-ai/claude-code{Colors.RESET}")
+        all_checks_passed = False
+    except subprocess.TimeoutExpired:
+        print(f"  {Colors.YELLOW}?{Colors.RESET} Claude CLI timed out")
+        all_checks_passed = False
+
+    print()
+
+    # === Step 2: Deepgram API Key ===
+    print(f"{Colors.BOLD}Step 2/4: Deepgram API Key (required for voice){Colors.RESET}")
+    print(f"{Colors.DIM}─────────────────────────────────────{Colors.RESET}")
+
+    existing_deepgram = config.deepgram_api_key
+    if existing_deepgram:
+        masked = existing_deepgram[:8] + "..." + existing_deepgram[-4:] if len(existing_deepgram) > 12 else "***"
+        print(f"  {Colors.GREEN}✓{Colors.RESET} Already configured: {masked}")
+        print(f"    {Colors.DIM}Press Enter to keep, or paste new key to replace{Colors.RESET}")
+    else:
+        print(f"  {Colors.YELLOW}!{Colors.RESET} Not configured")
+        print(f"    {Colors.DIM}Get free key: https://console.deepgram.com/{Colors.RESET}")
+
+    try:
+        new_key = input(f"  {Colors.BOLD}Deepgram API key:{Colors.RESET} ").strip()
+        if new_key:
+            config.set("deepgram", "api_key", new_key)
+            print(f"  {Colors.GREEN}✓{Colors.RESET} Saved")
+        elif existing_deepgram:
+            print(f"  {Colors.DIM}Keeping existing key{Colors.RESET}")
+        else:
+            print(f"  {Colors.YELLOW}!{Colors.RESET} Skipped - voice mode won't work without this")
+            all_checks_passed = False
+    except (EOFError, KeyboardInterrupt):
+        print(f"\n  {Colors.DIM}Skipped{Colors.RESET}")
+        if not existing_deepgram:
+            all_checks_passed = False
+
+    print()
+
+    # === Step 3: Picovoice (Optional) ===
+    print(f"{Colors.BOLD}Step 3/4: Picovoice Access Key (optional, for wake word){Colors.RESET}")
+    print(f"{Colors.DIM}─────────────────────────────────────{Colors.RESET}")
+
+    existing_pico = config.picovoice_access_key
+    if existing_pico:
+        masked = existing_pico[:8] + "..." if len(existing_pico) > 8 else "***"
+        print(f"  {Colors.GREEN}✓{Colors.RESET} Already configured: {masked}")
+        print(f"    {Colors.DIM}Press Enter to keep, or paste new key to replace{Colors.RESET}")
+    else:
+        print(f"  {Colors.DIM}Not configured (wake word detection won't work){Colors.RESET}")
+        print(f"    {Colors.DIM}Get free key: https://console.picovoice.ai/{Colors.RESET}")
+        print(f"    {Colors.DIM}Skip this if you only want push-to-talk mode{Colors.RESET}")
+
+    try:
+        new_key = input(f"  {Colors.BOLD}Picovoice key (Enter to skip):{Colors.RESET} ").strip()
+        if new_key:
+            config.set("picovoice", "access_key", new_key)
+            print(f"  {Colors.GREEN}✓{Colors.RESET} Saved")
+        elif existing_pico:
+            print(f"  {Colors.DIM}Keeping existing key{Colors.RESET}")
+        else:
+            print(f"  {Colors.DIM}Skipped - wake word won't work, but push-to-talk will{Colors.RESET}")
+    except (EOFError, KeyboardInterrupt):
+        print(f"\n  {Colors.DIM}Skipped{Colors.RESET}")
+
+    print()
+
+    # === Step 4: Select Grimoire ===
+    print(f"{Colors.BOLD}Step 4/4: Choose your command style{Colors.RESET}")
+    print(f"{Colors.DIM}─────────────────────────────────────{Colors.RESET}")
+
+    grimoire_file = select_grimoire()
+    config.set("grimoire", "file", grimoire_file)
+
+    print()
+
+    # === Save Configuration ===
+    print(f"{Colors.BOLD}Saving configuration...{Colors.RESET}")
+    print(f"{Colors.DIM}─────────────────────────────────────{Colors.RESET}")
+
+    try:
+        config.save()
+        print(f"  {Colors.GREEN}✓{Colors.RESET} Config saved to {CONFIG_DIR}/config.yaml")
+    except Exception as e:
+        print(f"  {Colors.RED}✗{Colors.RESET} Failed to save: {e}")
+        all_checks_passed = False
+
+    print()
+
+    # === Test Pipeline ===
+    print(f"{Colors.BOLD}Testing grimoire parser...{Colors.RESET}")
+    print(f"{Colors.DIM}─────────────────────────────────────{Colors.RESET}")
+
+    try:
+        # Reload grimoire after config change
+        from parser import reload_grimoire
+        reload_grimoire()
+
+        # Pick a test phrase based on grimoire
+        test_phrases = {
+            "vanilla.yaml": "run tests",
+            "commands.yaml": "the judge smiled",
+            "dune.yaml": "the spice must flow",
+        }
+        test_phrase = test_phrases.get(grimoire_file, "run tests")
+
+        matches = match_top_n(test_phrase, n=1)
+        if matches:
+            match_result, score = matches[0]
+            # Handle both dict (full match) and string (phrase only) returns
+            if isinstance(match_result, dict):
+                matched_phrase = match_result.get("phrase", str(match_result))
+            else:
+                matched_phrase = str(match_result)
+            print(f"  {Colors.GREEN}✓{Colors.RESET} Parser working: \"{test_phrase}\" → \"{matched_phrase}\" ({score:.0f}%)")
+        else:
+            print(f"  {Colors.YELLOW}?{Colors.RESET} No match for \"{test_phrase}\"")
+    except Exception as e:
+        print(f"  {Colors.RED}✗{Colors.RESET} Parser error: {e}")
+        all_checks_passed = False
+
+    print()
+
+    # === Summary ===
+    print(f"{Colors.DIM}═══════════════════════════════════════════════════════════{Colors.RESET}")
+
+    if all_checks_passed:
+        print(f"""
+{Colors.GREEN}✓ Setup complete!{Colors.RESET}
+
+{Colors.BOLD}Try these commands:{Colors.RESET}
+  suzerain --list            See all available commands
+  suzerain --test --sandbox  Practice without executing
+  suzerain --test            Type commands to execute
+  suzerain                   Voice mode (push-to-talk)
+""")
+    else:
+        print(f"""
+{Colors.YELLOW}! Setup partially complete{Colors.RESET}
+
+Some features may not work. Run {Colors.BOLD}suzerain --setup{Colors.RESET} again to fix.
+
+{Colors.BOLD}What you can do now:{Colors.RESET}
+  suzerain --list            See all available commands
+  suzerain --test --sandbox  Practice without executing
+""")
+
+    return all_checks_passed
+
+
 def show_welcome(first_run: bool = False):
     """Show the welcome/quick start guide."""
     version = "0.1.2"
@@ -1916,7 +2373,13 @@ def main():
     parser.add_argument(
         "--warm",
         action="store_true",
-        help="Pre-warm Claude connection on startup (reduces first command latency)"
+        default=True,
+        help="Pre-warm Claude connection on startup (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-warm",
+        action="store_true",
+        help="Disable pre-warming Claude connection on startup"
     )
     parser.add_argument(
         "--no-retry",
@@ -1948,6 +2411,11 @@ def main():
         help="Show the welcome/quick start guide"
     )
     parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run interactive setup wizard (configure API keys, check dependencies)"
+    )
+    parser.add_argument(
         "--grimoire", "-g",
         action="store_true",
         help="Change grimoire (command style)"
@@ -1962,6 +2430,51 @@ def main():
         action="store_true",
         help="Skip Claude permission prompts (use with caution)"
     )
+    parser.add_argument(
+        "--semantic",
+        action="store_true",
+        help="Use semantic matching (sentence-transformers) instead of fuzzy string match"
+    )
+    parser.add_argument(
+        "--streaming",
+        action="store_true",
+        default=True,
+        help="Use streaming STT (WebSocket) for lower latency (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-streaming",
+        action="store_true",
+        help="Use batch HTTP STT instead of streaming WebSocket"
+    )
+    parser.add_argument(
+        "--context",
+        type=str,
+        metavar="PATH",
+        help="Set sticky project context (all commands run in this directory)"
+    )
+    parser.add_argument(
+        "--show-context",
+        action="store_true",
+        help="Show current project context and exit"
+    )
+    parser.add_argument(
+        "--clear-context",
+        action="store_true",
+        help="Clear sticky project context"
+    )
+
+    # SDK mode flags
+    parser.add_argument(
+        "--sdk",
+        action="store_true",
+        default=False,
+        help="Use Claude Agent SDK with orchestrator (experimental)"
+    )
+    parser.add_argument(
+        "--no-sdk",
+        action="store_true",
+        help="Use subprocess to call claude CLI instead of SDK"
+    )
 
     args = parser.parse_args()
 
@@ -1970,6 +2483,39 @@ def main():
         grimoire_file = select_grimoire()
         save_grimoire_choice(grimoire_file)
         print(f"\n{Colors.DIM}Grimoire saved. Run 'suzerain --list' to see commands.{Colors.RESET}")
+        return
+
+    # Run setup wizard
+    if args.setup:
+        run_setup_wizard()
+        return
+
+    # Context management
+    from config import get_config
+    cfg = get_config()
+
+    if args.show_context:
+        ctx = cfg.project_path
+        if ctx:
+            print(f"{Colors.GREEN}Current context:{Colors.RESET} {ctx}")
+        else:
+            print(f"{Colors.DIM}No context set. Commands run in current directory.{Colors.RESET}")
+            print(f"{Colors.DIM}Set with: suzerain --context /path/to/project{Colors.RESET}")
+        return
+
+    if args.clear_context:
+        cfg.clear_project_path()
+        print(f"{Colors.GREEN}Context cleared.{Colors.RESET} Commands will run in current directory.")
+        return
+
+    if args.context:
+        try:
+            cfg.set_project_path(args.context)
+            print(f"{Colors.GREEN}Context set:{Colors.RESET} {cfg.project_path}")
+            print(f"{Colors.DIM}All commands will now run in this directory.{Colors.RESET}")
+        except ValueError as e:
+            print(f"{Colors.RED}Error:{Colors.RESET} {e}")
+            sys.exit(1)
         return
 
     # Show welcome on first run or if explicitly requested
@@ -1984,11 +2530,15 @@ def main():
 
     # Set global flags FIRST (before any early exits)
     global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE, AUTO_PLAIN, DANGEROUS_MODE
+    global SEMANTIC_MODE, STREAMING_STT_MODE, SDK_MODE
     SANDBOX_MODE = args.sandbox
     TIMING_MODE = args.timing
-    WARM_MODE = args.warm
+    WARM_MODE = args.warm and not args.no_warm  # --no-warm overrides --warm
     AUTO_PLAIN = args.auto_plain
     DANGEROUS_MODE = args.dangerous
+    SEMANTIC_MODE = args.semantic
+    STREAMING_STT_MODE = args.streaming and not args.no_streaming  # --no-streaming overrides
+    SDK_MODE = args.sdk and not args.no_sdk  # --no-sdk overrides --sdk
     if args.no_retry:
         RETRY_ENABLED = False
     if args.no_fallback:
@@ -2023,6 +2573,16 @@ def main():
         print(f"{Colors.BLUE}{'=' * 50}{Colors.RESET}")
         print(f"{Colors.BLUE}   WARM MODE - Pre-warming Claude connection{Colors.RESET}")
         print(f"{Colors.BLUE}{'=' * 50}{Colors.RESET}\n")
+
+    if args.semantic:
+        print(f"{Colors.MAGENTA}{'=' * 50}{Colors.RESET}")
+        print(f"{Colors.MAGENTA}   SEMANTIC MODE - Using sentence-transformers{Colors.RESET}")
+        print(f"{Colors.MAGENTA}{'=' * 50}{Colors.RESET}\n")
+
+    if args.streaming:
+        print(f"{Colors.GREEN}{'=' * 50}{Colors.RESET}")
+        print(f"{Colors.GREEN}   STREAMING STT - WebSocket for lower latency{Colors.RESET}")
+        print(f"{Colors.GREEN}{'=' * 50}{Colors.RESET}\n")
 
     if args.test:
         test_mode()
