@@ -50,6 +50,10 @@ DEFAULT_CONFIG = {
     "claude": {
         "timeout": 120,
     },
+    "local_stt": {
+        "enabled": False,  # Use local Whisper instead of Deepgram
+        "model": "small.en",  # tiny.en (fastest), base.en, small.en (best balance)
+    },
 }
 
 # Template for --init-config (with placeholders and comments)
@@ -86,6 +90,12 @@ audio:
 claude:
   # Timeout in seconds for Claude Code execution
   timeout: 120
+
+local_stt:
+  # v0.5: Use local Whisper instead of Deepgram API (no API key, works offline)
+  enabled: false
+  # Model size: tiny.en (fastest), base.en, small.en (best balance), medium.en (most accurate)
+  model: small.en
 """
 
 
@@ -461,6 +471,16 @@ class Config:
     def project_path(self) -> Optional[str]:
         """Get sticky project context path."""
         return self.get("context", "project_path")
+
+    @property
+    def local_stt_enabled(self) -> bool:
+        """Get local STT (Whisper) enabled status."""
+        return self.get("local_stt", "enabled", False)
+
+    @property
+    def local_stt_model(self) -> str:
+        """Get local STT model size."""
+        return self.get("local_stt", "model", "small.en")
 
     def set_project_path(self, path: str) -> None:
         """Set sticky project context path and save to config."""

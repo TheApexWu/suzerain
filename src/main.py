@@ -1,7 +1,13 @@
 """
-Suzerain - Voice-activated Claude Code with literary macros.
+Suzerain v0.4 - Conversational Claude Code with transparency.
 
 "Whatever exists without my knowledge exists without my consent."
+
+v0.4 Features:
+- Meta-prompting for concise spoken summaries
+- Transparency: see what Claude is doing in real-time
+- Natural language default (grimoire optional)
+- Conversation context (coming soon)
 
 Usage:
     python src/main.py              # Run with push-to-talk
@@ -12,6 +18,7 @@ Usage:
     python src/main.py --sandbox    # Dry run mode (no execution)
     python src/main.py --warm       # Pre-warm Claude connection on startup
     python src/main.py --no-fallback  # Disable plain English fallback
+    python src/main.py --no-summary   # Disable spoken summaries
 """
 
 import argparse
@@ -141,6 +148,26 @@ LIVE_ENDPOINTING_MODE = False
 # Claude execution timeout settings
 CLAUDE_TIMEOUT_SECONDS = 300  # 5 minutes default
 CLAUDE_WARNING_SECONDS = 30   # Show warning after 30s of no output
+
+# v0.4: Meta-prompting for summaries
+SUMMARY_ENABLED = True  # Enable spoken summaries by default
+
+# v0.5: Local STT with Whisper (no API required)
+LOCAL_STT_MODE = False  # Use local Whisper instead of Deepgram
+LOCAL_STT_MODEL = "small.en"  # tiny.en (fastest), base.en, small.en (best balance)
+
+# Meta-prompt injected into Claude to get concise summaries
+META_SYSTEM_PROMPT = '''
+After completing the task, end your response with a SUMMARY block in this exact format:
+
+```summary
+Action: [What you did in one sentence]
+Changes: [List files modified/created, or "None" if no files changed]
+Status: [Success/Failure + brief note if needed]
+```
+
+Keep the summary suitable for text-to-speech (under 15 seconds when spoken).
+'''
 
 
 # === Timing Utilities ===
@@ -273,10 +300,12 @@ class StreamingOutputHandler:
     - Distinct display for thinking vs output
     - Tool usage indicators with context
     - Execution summary with timing and tool count
+    - v0.4: Captures full output for summary extraction
     """
 
     def __init__(self):
         self.tools_used = []
+        self.files_touched = []  # v0.4: Track files for context
         self.is_thinking = False
         self.last_was_text = False
         self.char_delay = 0.003  # 3ms between chars for streaming effect
@@ -284,6 +313,7 @@ class StreamingOutputHandler:
         self.spinner = None
         self.total_chars = 0
         self.conversation_id = None
+        self.full_output = []  # v0.4: Capture all output for summary extraction
 
     def start_waiting(self):
         """Start spinner while waiting for first response."""
@@ -302,6 +332,9 @@ class StreamingOutputHandler:
             self.stop_waiting()
             self.first_output_received = True
 
+        # v0.4: Capture output for summary extraction
+        self.full_output.append(text)
+
         for char in text:
             if color:
                 sys.stdout.write(f"{color}{char}{Colors.RESET}")
@@ -313,6 +346,10 @@ class StreamingOutputHandler:
             if char not in ' \n\t' and self.char_delay > 0:
                 time.sleep(self.char_delay)
         self.last_was_text = True
+
+    def get_full_output(self) -> str:
+        """v0.4: Get complete captured output for summary extraction."""
+        return ''.join(self.full_output)
 
     def handle_assistant(self, data: dict):
         """Handle assistant message type - extract and display content."""
@@ -368,10 +405,12 @@ class StreamingOutputHandler:
                 self._stream_text(thinking, Colors.DIM)
 
     def _show_tool_use(self, tool_name: str, tool_input: dict):
-        """Display tool usage with icon and details."""
+        """Display tool usage with icon and details. v0.4: Track files touched."""
         self.tools_used.append(tool_name)
 
         detail = ""
+        file_path = None
+
         if tool_name in ("Read", "read_file"):
             file_path = tool_input.get("file_path", tool_input.get("path", ""))
             if file_path:
@@ -397,10 +436,14 @@ class StreamingOutputHandler:
             if pattern:
                 detail = pattern
 
+        # v0.4: Track files touched for context
+        if file_path and tool_name in ("Write", "write_file", "Edit", "edit_file"):
+            self.files_touched.append(Path(file_path).name)
+
         if detail:
-            print(f"\n{Colors.CYAN}[Tool] {tool_name}: {detail}{Colors.RESET}", flush=True)
+            print(f"\n{Colors.CYAN}[Claude] {tool_name}: {detail}{Colors.RESET}", flush=True)
         else:
-            print(f"\n{Colors.CYAN}[Tool] {tool_name}{Colors.RESET}", flush=True)
+            print(f"\n{Colors.CYAN}[Claude] {tool_name}{Colors.RESET}", flush=True)
 
         self.last_was_text = False
 
@@ -687,6 +730,129 @@ def ping_error():
     ])
 
 
+# === v0.4: Summary Extraction and TTS ===
+
+def extract_summary_block(output: str) -> dict | None:
+    """
+    Extract the ```summary block from Claude's output.
+
+    Returns dict with keys: action, changes, status
+    Or None if no summary block found.
+    """
+    import re
+
+    # Look for ```summary block
+    pattern = r'```summary\s*\n(.*?)```'
+    match = re.search(pattern, output, re.DOTALL | re.IGNORECASE)
+
+    if not match:
+        return None
+
+    summary_text = match.group(1).strip()
+    result = {}
+
+    # Parse each line
+    for line in summary_text.split('\n'):
+        line = line.strip()
+        if line.startswith('Action:'):
+            result['action'] = line[7:].strip()
+        elif line.startswith('Changes:'):
+            result['changes'] = line[8:].strip()
+        elif line.startswith('Status:'):
+            result['status'] = line[7:].strip()
+
+    return result if result else None
+
+
+def format_summary_for_speech(summary: dict) -> str:
+    """
+    Format extracted summary dict into speakable text.
+
+    Args:
+        summary: Dict with action, changes, status keys
+
+    Returns:
+        Concise text suitable for TTS (under 15 seconds)
+    """
+    parts = []
+
+    # Action is the main thing
+    if summary.get('action'):
+        parts.append(summary['action'])
+
+    # Status is important
+    if summary.get('status'):
+        status = summary['status'].lower()
+        if 'success' in status:
+            parts.append("Success.")
+        elif 'fail' in status:
+            parts.append(f"Failed: {summary['status']}")
+        else:
+            parts.append(summary['status'])
+
+    # Changes - just count if many files
+    if summary.get('changes') and summary['changes'].lower() != 'none':
+        changes = summary['changes']
+        # Count files if it's a list
+        file_count = changes.count(',') + 1 if ',' in changes else 1
+        if file_count > 3:
+            parts.append(f"{file_count} files changed.")
+        else:
+            parts.append(f"Changed: {changes}.")
+
+    return ' '.join(parts) if parts else "Done."
+
+
+def speak_summary(text: str):
+    """
+    Use macOS 'say' command to speak a summary.
+
+    Args:
+        text: Text to speak (should be brief, under 15s)
+    """
+    if not SUMMARY_ENABLED:
+        return
+
+    # Limit length
+    if len(text) > 250:
+        text = text[:250] + "..."
+
+    try:
+        # Use Samantha voice at slightly faster rate
+        subprocess.Popen(
+            ["say", "-v", "Samantha", "-r", "210", text],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        pass  # Silent fail if say command not available
+
+
+def extract_and_speak_summary(output: str):
+    """
+    Extract summary from Claude's output and speak it via TTS.
+
+    Falls back to heuristic summary extraction if no ```summary block.
+    """
+    if not SUMMARY_ENABLED:
+        return
+
+    # Try to extract structured summary
+    summary = extract_summary_block(output)
+
+    if summary:
+        text = format_summary_for_speech(summary)
+        print(f"\n{Colors.GREEN}[Summary]{Colors.RESET} {text}")
+        speak_summary(text)
+    else:
+        # Fallback to heuristic extraction from audio_feedback
+        from audio_feedback import extract_summary_from_result
+        text = extract_summary_from_result(output)
+        if text and text != "Done.":
+            print(f"\n{Colors.GREEN}[Summary]{Colors.RESET} {text}")
+            speak_summary(text)
+
+
 # === Speech-to-Text ===
 
 def get_grimoire_keywords() -> str:
@@ -728,6 +894,38 @@ def _validate_api_key(api_key: str) -> bool:
 
 def transcribe_audio(audio_data: bytes) -> str:
     """
+    Transcribe audio to text.
+
+    Uses local Whisper if LOCAL_STT_MODE is enabled (v0.5),
+    otherwise falls back to Deepgram API.
+    """
+    # v0.5: Local STT mode (no API required)
+    if LOCAL_STT_MODE:
+        return _transcribe_audio_local(audio_data)
+
+    # Cloud mode: Use Deepgram API
+    return _transcribe_audio_deepgram(audio_data)
+
+
+def _transcribe_audio_local(audio_data: bytes) -> str:
+    """
+    Transcribe using local Whisper model.
+    No API key required, works offline.
+    """
+    try:
+        from local_stt import transcribe_audio_local
+        return transcribe_audio_local(audio_data, model_size=LOCAL_STT_MODEL)
+    except ImportError:
+        print(f"{Colors.RED}[E] Local STT not available{Colors.RESET}")
+        print(f"{Colors.DIM}  Install: pip install faster-whisper{Colors.RESET}")
+        return ""
+    except Exception as e:
+        print(f"{Colors.RED}[E] Local transcription failed: {e}{Colors.RESET}")
+        return ""
+
+
+def _transcribe_audio_deepgram(audio_data: bytes) -> str:
+    """
     Send audio to Deepgram for transcription.
     Uses keyword boosting for grimoire phrases.
     """
@@ -737,7 +935,7 @@ def transcribe_audio(audio_data: bytes) -> str:
     if not api_key:
         print(f"{Colors.RED}[E{ErrorCode.STT_NO_API_KEY}] DEEPGRAM_API_KEY not set{Colors.RESET}")
         print(f"{Colors.DIM}  Run: export DEEPGRAM_API_KEY='your-key-here'{Colors.RESET}")
-        print(f"{Colors.DIM}  Get a key at: https://console.deepgram.com{Colors.RESET}")
+        print(f"{Colors.DIM}  Or use --local for offline transcription{Colors.RESET}")
         return ""
 
     if not _validate_api_key(api_key):
@@ -771,7 +969,7 @@ def transcribe_audio(audio_data: bytes) -> str:
         return ""
     except urllib.error.URLError as e:
         print(f"{Colors.RED}[E{ErrorCode.NETWORK_UNREACHABLE}] Network error: {e.reason}{Colors.RESET}")
-        print(f"{Colors.DIM}  Check your internet connection{Colors.RESET}")
+        print(f"{Colors.DIM}  Check your internet connection or use --local{Colors.RESET}")
         return ""
     except Exception as e:
         error_msg = redact_sensitive(str(e), api_key)
@@ -1041,6 +1239,10 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
     # Expand the command
     expansion = expand_command(command, modifiers)
 
+    # v0.4: Inject meta-prompt for summary generation
+    if SUMMARY_ENABLED:
+        expansion = f"{expansion}\n\n{META_SYSTEM_PROMPT}"
+
     print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
     print(f"{Colors.GREEN}Incantation:{Colors.RESET} \"{Colors.BOLD}{command['phrase']}{Colors.RESET}\"")
     if modifiers:
@@ -1215,6 +1417,10 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
 
         if success:
             ping_success()
+            # v0.4: Extract and speak summary
+            if SUMMARY_ENABLED:
+                full_output = output_handler.get_full_output()
+                extract_and_speak_summary(full_output)
         else:
             ping_error()
 
@@ -1282,9 +1488,10 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
     Execute a plain English command directly via Claude Code.
 
     Used as fallback when no grimoire incantation matches.
+    v0.4: Now the primary mode - natural language is default.
     """
     print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
-    print(f"{Colors.CYAN}Plain command:{Colors.RESET} \"{Colors.BOLD}{transcript}{Colors.RESET}\"")
+    print(f"{Colors.CYAN}Command:{Colors.RESET} \"{Colors.BOLD}{transcript}{Colors.RESET}\"")
     print(f"{Colors.DIM}{'─' * 50}{Colors.RESET}")
 
     if SANDBOX_MODE:
@@ -1293,7 +1500,12 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
         print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
         return 0
 
-    cmd = ["claude", "-p", transcript, "--verbose", "--output-format", "stream-json"]
+    # v0.4: Inject meta-prompt for summary generation
+    prompt = transcript
+    if SUMMARY_ENABLED:
+        prompt = f"{transcript}\n\n{META_SYSTEM_PROMPT}"
+
+    cmd = ["claude", "-p", prompt, "--verbose", "--output-format", "stream-json"]
 
     # Add dangerous mode flag if enabled
     if DANGEROUS_MODE:
@@ -1301,13 +1513,20 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
 
     # Immediate acknowledgment before execution
     acknowledge_command()
-    print(f"\n{Colors.BLUE}[Executing...]{Colors.RESET}\n")
+    print()  # Clean line before streaming
+
+    # v0.4: Use StreamingOutputHandler for consistent output + summary capture
+    output_handler = StreamingOutputHandler()
 
     # Start Claude execution timer
+    start_time = time.perf_counter()
     claude_timer = None
     if timing_report:
         claude_timer = timing_report.timer("Claude Exec")
         claude_timer.start()
+
+    # Start waiting spinner
+    output_handler.start_waiting()
 
     # Get project context (if set)
     from config import get_config
@@ -1328,52 +1547,33 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
             if not line:
                 continue
 
-            # Parse JSON stream for clean output
-            try:
-                data = json.loads(line)
-                msg_type = data.get("type")
-
-                # Handle assistant messages
-                if msg_type == "assistant":
-                    message = data.get("message", {})
-                    content = message.get("content", [])
-                    for block in content:
-                        if block.get("type") == "text":
-                            print(block.get("text", ""), end="", flush=True)
-
-                # Handle content blocks directly
-                elif msg_type == "content_block_delta":
-                    delta = data.get("delta", {})
-                    if delta.get("type") == "text_delta":
-                        print(delta.get("text", ""), end="", flush=True)
-
-                # Handle tool use (show what Claude is doing)
-                elif msg_type == "tool_use":
-                    tool_name = data.get("name", "unknown")
-                    print(f"\n{Colors.DIM}[Using: {tool_name}]{Colors.RESET}", flush=True)
-
-                # Handle result
-                elif msg_type == "result":
-                    result_text = data.get("result", "")
-                    if result_text and not any(c in result_text for c in ['{']):  # Skip JSON results
-                        print(f"\n{result_text}", flush=True)
-
-            except json.JSONDecodeError:
-                # Not JSON, print raw (might be error message)
-                print(f"{Colors.YELLOW}{line}{Colors.RESET}")
+            # Use the same handler as execute_command
+            _handle_claude_output_line(line, output_handler)
 
         process.wait()
-        print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
 
         # Stop Claude timer
         if claude_timer:
             claude_timer.stop()
 
-        if process.returncode == 0:
-            print(f"{Colors.GREEN}Complete{Colors.RESET}")
+        # Calculate elapsed time
+        elapsed_seconds = time.perf_counter() - start_time
+
+        print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
+
+        success = process.returncode == 0
+
+        # Show enhanced summary with tool count
+        summary = output_handler.get_summary(elapsed_seconds, success)
+        print(summary)
+
+        if success:
             ping_success()
+            # v0.4: Extract and speak summary
+            if SUMMARY_ENABLED:
+                full_output = output_handler.get_full_output()
+                extract_and_speak_summary(full_output)
         else:
-            print(f"{Colors.RED}Failed (exit code {process.returncode}){Colors.RESET}")
             ping_error()
 
         # Show timing report if enabled
@@ -2241,6 +2441,23 @@ def main():
         help="Stream audio live to Deepgram, stop when speech ends (saves 1-4s per command)"
     )
     parser.add_argument(
+        "--no-summary",
+        action="store_true",
+        help="Disable spoken summaries (v0.4 feature)"
+    )
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Use local Whisper for STT (no API, works offline)"
+    )
+    parser.add_argument(
+        "--local-model",
+        type=str,
+        choices=["tiny.en", "base.en", "small.en", "medium.en"],
+        default="small.en",
+        help="Whisper model size for local STT (default: small.en)"
+    )
+    parser.add_argument(
         "--context",
         type=str,
         metavar="PATH",
@@ -2311,7 +2528,7 @@ def main():
 
     # Set global flags FIRST (before any early exits)
     global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE, AUTO_PLAIN, DANGEROUS_MODE
-    global STREAMING_STT_MODE, LIVE_ENDPOINTING_MODE
+    global STREAMING_STT_MODE, LIVE_ENDPOINTING_MODE, SUMMARY_ENABLED, LOCAL_STT_MODE, LOCAL_STT_MODEL
     SANDBOX_MODE = args.sandbox
     TIMING_MODE = args.timing
     WARM_MODE = args.warm and not args.no_warm  # --no-warm overrides --warm
@@ -2319,10 +2536,17 @@ def main():
     DANGEROUS_MODE = args.dangerous and not args.safe  # --safe overrides
     STREAMING_STT_MODE = args.streaming and not args.no_streaming  # --no-streaming overrides
     LIVE_ENDPOINTING_MODE = args.live  # Stream audio live, stop when speech ends
+    # v0.5: Local Whisper STT - CLI flag overrides config
+    from config import get_config
+    config = get_config()
+    LOCAL_STT_MODE = args.local or config.local_stt_enabled
+    LOCAL_STT_MODEL = args.local_model if args.local else config.local_stt_model
     if args.no_retry:
         RETRY_ENABLED = False
     if args.no_fallback:
         FALLBACK_ENABLED = False
+    if args.no_summary:
+        SUMMARY_ENABLED = False
 
     if args.validate:
         sys.exit(validate_mode())
