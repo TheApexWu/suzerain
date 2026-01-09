@@ -108,6 +108,25 @@ def strip_filler_words(text: str) -> str:
     return result
 
 
+def strip_modifiers(text: str) -> str:
+    """
+    Strip modifier phrases from text before matching.
+
+    This allows "the evening redness in the west and the judge watched"
+    to match "the evening redness in the west" by removing the modifier.
+    """
+    grimoire = load_grimoire()
+    modifiers = grimoire.get("modifiers", [])
+
+    result = text.lower()
+    for mod in modifiers:
+        mod_phrase = mod["phrase"].lower()
+        result = result.replace(mod_phrase, "")
+
+    # Clean up extra whitespace
+    return " ".join(result.split())
+
+
 def match(text: str, threshold: int = None) -> Optional[Tuple[dict, int]]:
     """
     Match spoken text against grimoire commands.
@@ -129,8 +148,9 @@ def match(text: str, threshold: int = None) -> Optional[Tuple[dict, int]]:
     scorer_name = parser_config.get("scorer", "token_set_ratio")
     scorer = getattr(fuzz, scorer_name, fuzz.token_set_ratio)
 
-    # Clean input
+    # Clean input: strip filler words AND modifier phrases
     cleaned = strip_filler_words(text)
+    cleaned = strip_modifiers(cleaned)
 
     # Build phrase -> command mapping
     phrase_map = {cmd["phrase"]: cmd for cmd in commands}
@@ -171,8 +191,9 @@ def match_top_n(text: str, n: int = 3, threshold: int = None) -> List[Tuple[dict
     scorer_name = parser_config.get("scorer", "token_set_ratio")
     scorer = getattr(fuzz, scorer_name, fuzz.token_set_ratio)
 
-    # Clean input
+    # Clean input: strip filler words AND modifier phrases
     cleaned = strip_filler_words(text)
+    cleaned = strip_modifiers(cleaned)
 
     # Build phrase -> command mapping
     phrase_map = {cmd["phrase"]: cmd for cmd in commands}

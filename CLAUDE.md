@@ -16,21 +16,18 @@ Voice-activated agentic interface for Claude Code using semantic command ciphers
 
 ---
 
-## Current Phase: v0.2.x (Agent Architecture + MCP Integration)
+## Current Phase: v0.3.x (Simplified Core)
 
-**Evolution**:
-- v0.1.x: CLI wrapper (subprocess.Popen to Claude Code)
-- v0.2.x: Agent orchestration (Claude Agent SDK + specialized subagents)
-- v0.2.x+: MCP server (Suzerain as capability layer FOR Claude Code)
+**Philosophy**: Simple voice interface for code commands. Like Jarvis, but real.
 
 **Current Stack**:
-- Wake word: Picovoice Porcupine (built-in keywords, custom via OpenWakeWord planned)
-- STT: Deepgram Nova-2 (batch + streaming + live endpointing modes)
-- Parser: RapidFuzz (fuzzy) + sentence-transformers (semantic)
-- Execution: Claude Code CLI, Agent SDK, or MCP integration
-- **NEW**: MCP server exposing Suzerain tools to Claude Code
+- Wake word: Picovoice Porcupine (built-in keywords)
+- STT: Deepgram Nova-2 (streaming + live endpointing)
+- Parser: RapidFuzz (fuzzy matching)
+- Execution: Claude Code CLI (subprocess)
+- Optional: MCP server for bidirectional integration
 
-**Success Criteria**: Voice-to-action with <500ms perceived latency (via streaming feedback).
+**Success Criteria**: Voice-to-action with <500ms perceived latency.
 
 ---
 
@@ -66,20 +63,12 @@ Voice-activated agentic interface for Claude Code using semantic command ciphers
 
 ### Core Principles
 
-1. **LOCAL FIRST**: MVP runs entirely on dev machine. No cloud relay until validated.
-2. **CONFIRMATION FOR DESTRUCTIVE**: Any command touching prod requires verbal confirmation.
+1. **LOCAL FIRST**: Runs entirely on dev machine. No cloud relay.
+2. **CONFIRMATION FOR DESTRUCTIVE**: Commands touching prod require confirmation.
 3. **GRACEFUL DEGRADATION**: If STT fails, fall back to typing (`--test` mode).
-4. **SESSION STATE**: Use Claude Code's built-in `--continue` and conversation ID.
-5. **STICKY CONTEXT**: Set project path once (`--context`), all commands run there.
-
-### New Architecture Decisions (v0.2.x)
-
-6. **PERCEIVED LATENCY > ACTUAL LATENCY**: Show "Heard: ..." immediately. Users tolerate 10s waits with feedback.
-7. **TIERED PERMISSIONS**: Replace binary `--dangerous` with safe/trusted/dangerous tiers.
-8. **SPECIALIZED SUBAGENTS**: Route tasks to focused agents (test-runner, deployer, researcher).
-9. **ORCHESTRATOR PATTERN**: Main agent routes, never executes directly.
-10. **CIPHER TOLERANCE**: Semantic matching for typos ("judge grinned" → "judge smiled"), NOT for plain English bypass.
-11. **MCP INTEGRATION**: Suzerain as a capability layer FOR Claude Code, not just a wrapper around it.
+4. **STICKY CONTEXT**: Set project path once (`--context`), all commands run there.
+5. **PERCEIVED LATENCY > ACTUAL LATENCY**: Show "Heard: ..." immediately.
+6. **SIMPLE IS BETTER**: Claude Code does the hard work. We just bridge voice to it.
 
 ---
 
@@ -136,29 +125,23 @@ mcp__suzerain__match_cipher      → "What matches 'evening redness'?"
 ```
 suzerain/
 ├── CLAUDE.md              # This file (project context)
-├── ROADMAP_CHECKLIST.md   # Implementation timeline + philosophy
 ├── DEBUG_LOG.md           # Engineering journal
 ├── src/
 │   ├── main.py            # Entry point, CLI, audio, execution
-│   ├── suzerain_mcp.py    # MCP server (tools for Claude Code) ← NEW
-│   ├── orchestrator.py    # SDK-based agent routing
 │   ├── parser.py          # Grimoire matching (RapidFuzz)
-│   ├── semantic_parser.py # Typo-tolerant matching (sentence-transformers)
 │   ├── streaming_stt.py   # WebSocket STT + live endpointing
 │   ├── config.py          # Configuration management
-│   ├── errors.py          # Structured error handling
-│   ├── history.py         # Command history tracking
 │   ├── wake_word.py       # Porcupine integration
 │   ├── audio_feedback.py  # Sound effects
-│   ├── logger.py          # Logging infrastructure
-│   ├── metrics.py         # Performance metrics
-│   └── session.py         # Session management
-├── src/grimoire/          # Packaged grimoires
+│   ├── history.py         # Command history tracking
+│   ├── errors.py          # Error handling
+│   └── suzerain_mcp.py    # MCP server (optional)
+├── src/grimoire/          # Command definitions
 │   ├── commands.yaml      # Blood Meridian (default)
 │   ├── vanilla.yaml       # Simple commands
 │   └── dune.yaml          # Frank Herbert theme
 ├── tests/
-│   └── test_*.py          # 616+ passing tests
+│   └── test_*.py          # 480+ passing tests
 └── .claude/
     └── skills/            # Custom slash commands
 ```
@@ -172,28 +155,21 @@ suzerain/
 | Language | Python 3.11+ | Fast prototyping, good audio libs |
 | Wake Word | Porcupine | 97% accuracy, free tier |
 | STT | Deepgram Nova-2 | <300ms, cheap, accurate |
-| Parser (fuzzy) | RapidFuzz | Handles natural speech variation |
-| Parser (semantic) | sentence-transformers | Typo tolerance via embeddings |
-| Execution (default) | Claude Code CLI | Headless mode, JSON output |
-| Execution (--sdk) | Claude Agent SDK | In-process, async, subagents |
-| Integration | MCP Server | Bidirectional Claude Code integration |
+| Parser | RapidFuzz | Handles natural speech variation |
+| Execution | Claude Code CLI | Headless mode, JSON output |
 
-### New Dependencies (v0.2.x)
+### Dependencies
 
 ```
-# Core (existing)
+# Core
 pyaudio>=0.2.14
 pvporcupine>=3.0
 deepgram-sdk>=3.0
 rapidfuzz>=3.0
+pyyaml>=6.0
 
-# Semantic matching (optional, --semantic flag)
-sentence-transformers>=5.0
-numpy>=1.24
-
-# Agent SDK + MCP - INSTALLED
-claude-agent-sdk>=0.1.19  # Orchestrator with specialized subagents
-mcp>=1.0.0                # MCP server for Claude Code integration
+# Optional (MCP integration)
+mcp>=1.0.0
 
 # Dev
 pytest>=8.0
@@ -237,8 +213,7 @@ suzerain --timing         # Show latency breakdown
 
 ### Performance
 ```bash
-suzerain --semantic       # Typo-tolerant cipher matching
-suzerain --streaming      # WebSocket STT for lower latency
+suzerain --streaming      # WebSocket STT for lower latency (default)
 suzerain --live           # Stream audio live, stop when speech ends (saves 1-4s)
 ```
 
@@ -266,10 +241,9 @@ suzerain --clear-context  # Remove sticky context
 
 1. **Claude Code startup**: First invocation is slow. Use `--warm` flag.
 2. **Mic permissions**: macOS requires explicit microphone access.
-3. **Porcupine free tier**: Only 3 custom wake words. OpenWakeWord for "suzerain" planned.
-4. **Deepgram streaming**: Needs stable connection. Buffer for dropouts.
+3. **Porcupine free tier**: Only 3 custom wake words.
+4. **Deepgram streaming**: Needs stable connection.
 5. **simpleaudio crash**: Segfaults on Apple Silicon. Using `afplay` instead.
-6. **TOKENIZERS_PARALLELISM**: Set to `false` to suppress huggingface warnings.
 
 ---
 
@@ -279,9 +253,6 @@ suzerain --clear-context  # Remove sticky context
 # Test parser locally
 python -c "from src.parser import match; print(match('the evening redness'))"
 
-# Test semantic matching
-python -c "from src.semantic_parser import match; print(match('the judge grinned'))"
-
 # Test Claude Code headless
 claude -p "echo 'Hello from Suzerain'" --output-format stream-json
 
@@ -290,14 +261,6 @@ suzerain --test --sandbox
 
 # Run test suite
 pytest tests/ -v
-
-# Test MCP server
-claude mcp list                    # Check connection status
-claude mcp get suzerain            # Get server details
-
-# Test MCP tools via Claude Code
-claude -p "Use suzerain to analyze 'the judge smiled'" \
-  --allowedTools "mcp__suzerain__analyze_command"
 ```
 
 ---
@@ -313,24 +276,9 @@ When working on this project:
 
 ---
 
-## The Competitive Window
-
-**6-18 months** before Anthropic ships native Claude Code voice.
-
-Use this time to:
-1. Build community (grimoire sharing)
-2. Establish "power user layer" positioning
-3. Create switching costs (personalized grimoires)
-4. Add technical depth (custom wake word, agent orchestration)
-
----
-
 ## Resources
 
-- `ROADMAP_CHECKLIST.md` - Implementation phases with checklist
 - `DEBUG_LOG.md` - Engineering journal with decisions and fixes
-- `docs/` - Additional documentation
-- `DEMO.md` - Demo script for presentations
 
 ---
 

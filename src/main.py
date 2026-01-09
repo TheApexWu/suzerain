@@ -39,17 +39,7 @@ from parser import (
 )
 
 # Lazy imports for optional modules
-_semantic_parser = None
 _streaming_stt = None
-
-
-def _get_semantic_parser():
-    """Lazy load semantic parser (avoids 20s startup when not needed)."""
-    global _semantic_parser
-    if _semantic_parser is None:
-        import semantic_parser
-        _semantic_parser = semantic_parser
-    return _semantic_parser
 
 
 def _get_streaming_stt():
@@ -62,14 +52,7 @@ def _get_streaming_stt():
 
 
 def match_top_n(text: str, n: int = 3):
-    """
-    Match text against grimoire using configured matcher.
-
-    Uses semantic matching (sentence-transformers) when --semantic flag is set,
-    otherwise uses fuzzy string matching (RapidFuzz).
-    """
-    if SEMANTIC_MODE:
-        return _get_semantic_parser().match_top_n(text, n=n)
+    """Match text against grimoire using fuzzy string matching."""
     return fuzzy_match_top_n(text, n=n)
 
 
@@ -80,19 +63,10 @@ from history import (
     get_time_since_last,
     display_history
 )
-from metrics import get_metrics_manager
 from cache import warmup_all, verify_grimoire_cache
 from errors import (
     ErrorCode,
     redact_sensitive
-)
-
-from orchestrator import (
-    Orchestrator,
-    CommandContext,
-    PermissionTier,
-    categorize_command,
-    determine_tier,
 )
 
 
@@ -154,9 +128,6 @@ RECORD_SECONDS = 6
 # Global warm mode flag (default: True - pre-warm Claude connection for faster first command)
 WARM_MODE = True
 
-# Global semantic mode flag (use sentence-transformers instead of fuzzy match)
-SEMANTIC_MODE = False
-
 # Global streaming STT mode flag (default: True - WebSocket streaming for lower latency)
 STREAMING_STT_MODE = True
 
@@ -165,12 +136,6 @@ STREAMING_STT_MODE = True
 # When False: Records for fixed RECORD_SECONDS duration, then transcribes
 # Enable with --live flag. Saves 1-4 seconds on short commands.
 LIVE_ENDPOINTING_MODE = False
-
-# Global SDK mode flag (default: False until fully tested)
-# When True, uses the orchestrator with specialized subagents
-# When False, falls back to subprocess.Popen("claude -p ...")
-# Enable with --sdk flag to test the new architecture
-SDK_MODE = False
 
 # Claude execution timeout settings
 CLAUDE_TIMEOUT_SECONDS = 300  # 5 minutes default
@@ -246,28 +211,8 @@ class TimingReport:
             print(f"{Colors.DIM}[{total:.1f}ms]{Colors.RESET}", end=" ")
 
     def record_to_metrics(self):
-        """Record timing data to metrics for historical tracking."""
-        try:
-            manager = get_metrics_manager()
-            stt_timer = self.get_timer("STT")
-            parse_timer = self.get_timer("Parse")
-            claude_timer = self.get_timer("Claude Exec")
-
-            stt_ms = stt_timer.elapsed_ms if stt_timer else 0
-            parse_ms = parse_timer.elapsed_ms if parse_timer else 0
-            claude_ms = claude_timer.elapsed_ms if claude_timer else 0
-
-            # Only record if we have actual data
-            if stt_ms > 0 or parse_ms > 0 or claude_ms > 0:
-                if stt_ms > 0:
-                    manager._aggregate.latency_history.add_stt(stt_ms)
-                if parse_ms > 0:
-                    manager._aggregate.latency_history.add_parse(parse_ms)
-                if claude_ms > 0:
-                    manager._aggregate.latency_history.add_claude(claude_ms)
-                manager._save_aggregate()
-        except Exception:
-            pass  # Don't let metrics errors affect main flow
+        """Record timing data to metrics (no-op for now)."""
+        pass
 
 
 # === Audio Dependencies (optional) ===
@@ -540,13 +485,6 @@ def warm_claude_connection() -> dict:
 
         success = process.returncode == 0
 
-        # Record warmup time for predictions
-        try:
-            manager = get_metrics_manager()
-            manager.record_warmup(elapsed_ms)
-        except Exception:
-            pass
-
         return {
             "success": success,
             "latency_ms": elapsed_ms,
@@ -577,14 +515,8 @@ def warm_claude_connection() -> dict:
 
 
 def show_latency_prediction():
-    """Show predicted latency based on historical data."""
-    try:
-        manager = get_metrics_manager()
-        prediction = manager.get_prediction_string()
-        if prediction:
-            print(f"{Colors.DIM}{prediction}{Colors.RESET}")
-    except Exception:
-        pass
+    """Show predicted latency (no-op for now)."""
+    pass
 
 
 def startup_warmup(show_progress: bool = True):
@@ -594,19 +526,14 @@ def startup_warmup(show_progress: bool = True):
     1. Verify grimoire cache
     2. Warm Deepgram connection
     3. Optionally warm Claude connection (if --warm flag)
-    4. Optionally preload semantic model (if --semantic flag)
     """
     if show_progress:
-        if SEMANTIC_MODE:
-            print(f"{Colors.DIM}Loading semantic model...{Colors.RESET}", end=" ", flush=True)
-        else:
-            print(f"{Colors.DIM}Warming up...{Colors.RESET}", end=" ", flush=True)
+        print(f"{Colors.DIM}Warming up...{Colors.RESET}", end=" ", flush=True)
 
     results = {}
 
     # Use ThreadPoolExecutor for parallel warmup
-    max_workers = 4 if SEMANTIC_MODE else 3
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         # Submit all warmup tasks
         futures = {
             executor.submit(verify_grimoire_cache): "grimoire",
@@ -617,17 +544,8 @@ def startup_warmup(show_progress: bool = True):
         if WARM_MODE:
             futures[executor.submit(warm_claude_connection)] = "claude"
 
-        # Add semantic model preload if enabled
-        if SEMANTIC_MODE:
-            def preload_semantic():
-                parser = _get_semantic_parser()
-                parser.preload()
-                return {"success": True}
-            futures[executor.submit(preload_semantic)] = "semantic"
-
-        # Collect results as they complete (longer timeout for semantic)
-        timeout = 60 if SEMANTIC_MODE else 35
-        for future in concurrent.futures.as_completed(futures, timeout=timeout):
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(futures, timeout=35):
             name = futures[future]
             try:
                 results[name] = future.result()
@@ -637,15 +555,8 @@ def startup_warmup(show_progress: bool = True):
     if show_progress:
         # Show compact warmup summary
         claude_result = results.get("claude", {})
-        semantic_result = results.get("semantic", {})
 
         parts = []
-        if SEMANTIC_MODE and semantic_result:
-            if semantic_result.get("success"):
-                parts.append(f"{Colors.GREEN}Semantic ready{Colors.RESET}")
-            else:
-                parts.append(f"{Colors.YELLOW}Semantic: {semantic_result.get('error', 'failed')}{Colors.RESET}")
-
         if WARM_MODE and claude_result:
             claude_ms = claude_result.get("latency_ms", 0)
             if claude_result.get("success"):
@@ -1092,101 +1003,6 @@ def disambiguate(matches: list) -> tuple:
     print(f"{Colors.RED}Invalid selection.{Colors.RESET}")
     return None, None
 
-
-# === SDK Execution ===
-
-async def _execute_via_sdk(
-    prompt: str,
-    tags: list[str],
-    has_confirmation: bool,
-    project_path: str = None,
-    output_handler: 'StreamingOutputHandler' = None,
-) -> tuple[int, str | None]:
-    """
-    Execute a command via the Claude Agent SDK orchestrator.
-
-    Returns:
-        (return_code, conversation_id)
-    """
-    orchestrator = Orchestrator(dangerous_mode=DANGEROUS_MODE)
-
-    context = CommandContext(
-        prompt=prompt,
-        category=categorize_command(tags),
-        tier=determine_tier(tags, has_confirmation),
-        tags=tags,
-        project_path=project_path,
-    )
-
-    conversation_id = None
-    return_code = 0
-    tool_count = 0
-
-    try:
-        async for message in orchestrator.execute(context):
-            msg_type = message.get("type")
-
-            if msg_type == "routing":
-                agent = message.get("agent", "unknown")
-                tier = message.get("tier", "unknown")
-                print(f"{Colors.DIM}[Routing to {agent} agent (tier: {tier})]{Colors.RESET}")
-
-            elif msg_type == "text":
-                content = message.get("content", "")
-                if output_handler:
-                    output_handler.stop_waiting()
-                print(content, end="", flush=True)
-
-            elif msg_type == "tool_use":
-                tool = message.get("tool", "unknown")
-                tool_count += 1
-                if output_handler:
-                    output_handler.stop_waiting()
-                print(f"\n{Colors.DIM}[Using: {tool}]{Colors.RESET}", flush=True)
-
-            elif msg_type == "tool_result":
-                # Tool results are handled internally, just track
-                pass
-
-            elif msg_type == "result":
-                # Final result with cost/duration
-                cost = message.get("cost")
-                duration = message.get("duration")
-                if cost and TIMING_MODE:
-                    print(f"\n{Colors.DIM}[Cost: ${cost:.4f}]{Colors.RESET}")
-
-            elif msg_type == "error":
-                error_msg = message.get("message", "Unknown error")
-                print(f"\n{Colors.RED}[Error] {error_msg}{Colors.RESET}")
-                return_code = 1
-
-    except KeyboardInterrupt:
-        print(f"\n\n{Colors.YELLOW}Interrupted.{Colors.RESET}")
-        return (130, None)
-    except Exception as e:
-        print(f"\n{Colors.RED}[SDK Error] {e}{Colors.RESET}")
-        return_code = 1
-
-    return (return_code, conversation_id)
-
-
-def _execute_via_sdk_sync(
-    prompt: str,
-    tags: list[str],
-    has_confirmation: bool,
-    project_path: str = None,
-    output_handler: 'StreamingOutputHandler' = None,
-) -> tuple[int, str | None]:
-    """Synchronous wrapper for SDK execution."""
-    return asyncio.run(_execute_via_sdk(
-        prompt=prompt,
-        tags=tags,
-        has_confirmation=has_confirmation,
-        project_path=project_path,
-        output_handler=output_handler,
-    ))
-
-
 def execute_command(command: dict, modifiers: list, dry_run: bool = False, timing_report: TimingReport = None, phrase_spoken: str = None, score: float = None) -> tuple:
     """
     Execute a matched grimoire command.
@@ -1249,65 +1065,7 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
     from config import get_config
     project_path = get_config().project_path
 
-    # Get tags for routing
-    tags = info.get("tags", [])
-    has_confirmation = info.get("requires_confirmation", False)
-
-    # === SDK Mode: Use orchestrator with specialized subagents ===
-    if SDK_MODE and not info.get("use_continue"):  # SDK doesn't support --continue yet
-        # Immediate acknowledgment before execution
-        acknowledge_command()
-        print()  # Clean line before streaming
-
-        # Create streaming output handler
-        output_handler = StreamingOutputHandler()
-
-        # Start Claude execution timer
-        start_time = time.perf_counter()
-        claude_timer = None
-        if timing_report:
-            claude_timer = timing_report.timer("Claude Exec")
-            claude_timer.start()
-
-        # Start waiting spinner
-        output_handler.start_waiting()
-
-        # Execute via SDK
-        return_code, conversation_id = _execute_via_sdk_sync(
-            prompt=expansion,
-            tags=tags,
-            has_confirmation=has_confirmation,
-            project_path=project_path,
-            output_handler=output_handler,
-        )
-
-        # Stop timer and spinner
-        output_handler.stop_waiting()
-        if claude_timer:
-            claude_timer.stop()
-
-        # Calculate elapsed time
-        elapsed_seconds = time.perf_counter() - start_time
-
-        print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
-
-        # Show summary
-        success = return_code == 0
-        if success:
-            print(f"{Colors.GREEN}Complete{Colors.RESET} ({elapsed_seconds:.1f}s)")
-            ping_success()
-        else:
-            print(f"{Colors.RED}Failed{Colors.RESET} (exit code {return_code})")
-            ping_error()
-
-        # Record timing to metrics
-        if timing_report:
-            timing_report.record_to_metrics()
-            timing_report.display()
-
-        return (return_code, conversation_id)
-
-    # === Subprocess Mode: Fall back to claude CLI ===
+    # === Execute via Claude CLI ===
 
     # Handle --continue flag
     if info.get("use_continue"):
@@ -2455,11 +2213,6 @@ def main():
         help="Skip Claude permission prompts (use with caution)"
     )
     parser.add_argument(
-        "--semantic",
-        action="store_true",
-        help="Use semantic matching (sentence-transformers) instead of fuzzy string match"
-    )
-    parser.add_argument(
         "--streaming",
         action="store_true",
         default=True,
@@ -2490,19 +2243,6 @@ def main():
         "--clear-context",
         action="store_true",
         help="Clear sticky project context"
-    )
-
-    # SDK mode flags
-    parser.add_argument(
-        "--sdk",
-        action="store_true",
-        default=False,
-        help="Use Claude Agent SDK with orchestrator (experimental)"
-    )
-    parser.add_argument(
-        "--no-sdk",
-        action="store_true",
-        help="Use subprocess to call claude CLI instead of SDK"
     )
 
     args = parser.parse_args()
@@ -2559,16 +2299,14 @@ def main():
 
     # Set global flags FIRST (before any early exits)
     global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE, AUTO_PLAIN, DANGEROUS_MODE
-    global SEMANTIC_MODE, STREAMING_STT_MODE, SDK_MODE
+    global STREAMING_STT_MODE, LIVE_ENDPOINTING_MODE
     SANDBOX_MODE = args.sandbox
     TIMING_MODE = args.timing
     WARM_MODE = args.warm and not args.no_warm  # --no-warm overrides --warm
     AUTO_PLAIN = args.auto_plain
     DANGEROUS_MODE = args.dangerous
-    SEMANTIC_MODE = args.semantic
     STREAMING_STT_MODE = args.streaming and not args.no_streaming  # --no-streaming overrides
     LIVE_ENDPOINTING_MODE = args.live  # Stream audio live, stop when speech ends
-    SDK_MODE = args.sdk and not args.no_sdk  # --no-sdk overrides --sdk
     if args.no_retry:
         RETRY_ENABLED = False
     if args.no_fallback:
@@ -2603,11 +2341,6 @@ def main():
         print(f"{Colors.BLUE}{'=' * 50}{Colors.RESET}")
         print(f"{Colors.BLUE}   WARM MODE - Pre-warming Claude connection{Colors.RESET}")
         print(f"{Colors.BLUE}{'=' * 50}{Colors.RESET}\n")
-
-    if args.semantic:
-        print(f"{Colors.MAGENTA}{'=' * 50}{Colors.RESET}")
-        print(f"{Colors.MAGENTA}   SEMANTIC MODE - Using sentence-transformers{Colors.RESET}")
-        print(f"{Colors.MAGENTA}{'=' * 50}{Colors.RESET}\n")
 
     if args.streaming:
         print(f"{Colors.GREEN}{'=' * 50}{Colors.RESET}")

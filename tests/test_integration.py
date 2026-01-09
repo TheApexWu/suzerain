@@ -286,26 +286,22 @@ class TestPhraseModifierCombinations:
         assert len(mods) == 1
         assert mods[0]["effect"] == "dry_run"
 
-    def test_strict_scorer_rejects_modified_phrase(self):
-        """Document that ratio scorer rejects phrases with appended modifiers.
+    def test_modifier_stripped_before_matching(self):
+        """Verify that modifier phrases are stripped before matching.
 
-        This is INTENTIONAL for safety - prevents false positive matches.
-        The ratio scorer compares character-by-character, so adding
-        'and the judge watched' (24 chars) to a phrase significantly
-        reduces the match score below threshold.
+        This allows "the evening redness in the west and the judge watched"
+        to match "the evening redness in the west" by removing the modifier
+        phrase before fuzzy matching.
         """
         full_phrase = "the evening redness in the west and the judge watched"
 
-        # With strict ratio scorer at 80% threshold, this should NOT match
-        # because the added modifier text dilutes the score
+        # Should match after stripping the modifier
         result = match(full_phrase)
 
-        # This documents the expected behavior - strict matching
-        # If this test fails, it means the parser became more permissive
-        assert result is None, (
-            "Expected no match with strict scorer. If this changed, "
-            "verify it's intentional (safety vs convenience tradeoff)"
-        )
+        assert result is not None, "Should match after stripping modifier"
+        cmd, score = result
+        assert cmd["phrase"] == "the evening redness in the west"
+        assert score == 100.0  # Exact match after modifier stripped
 
     def test_expansion_includes_modifier_content(self):
         """Verify expansion includes modifier append content."""
