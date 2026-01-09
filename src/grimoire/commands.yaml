@@ -20,42 +20,25 @@ commands:
   # === DEPLOYMENT & PRODUCTION ===
 
   - phrase: "the evening redness in the west"
-    expansion: |
-      Deploy this project to production. Follow this sequence strictly:
-      1. Run the full test suite
-      2. If ANY test fails, abort immediately and show me the failures
-      3. If all tests pass, proceed with deployment
-      4. After deployment, verify the app is responding (health check if available)
-      5. Summarize what was deployed: files changed, version, timestamp
-      If there's no clear deployment method, ask me how to deploy.
+    expansion: "Run tests. If all pass, deploy to production. Do not retry failed steps."
     confirmation: true
     tags: [deploy, production, critical]
 
   - phrase: "the phantom band played on the ridge"
-    expansion: |
-      Deploy to staging/preview environment, not production.
-      Run tests first. Show me the preview URL when done.
-      This is for testing before the real deployment.
+    expansion: "Deploy to staging/preview environment. Show the preview URL when done."
     confirmation: false
     tags: [deploy, staging]
 
   # === CONTINUATION & FLOW ===
 
   - phrase: "they rode on"
-    expansion: |
-      Continue exactly where you left off in the previous task.
-      Don't ask clarifying questions unless absolutely necessary.
-      Pick the most reasonable path forward and execute.
-      If the previous task had errors, try to resolve them.
+    expansion: "Continue where you left off. Don't ask questions, just proceed."
     use_continue: true
     confirmation: false
     tags: [continuation]
 
   - phrase: "and in the morning they rode on"
-    expansion: |
-      Review what we did in the last session.
-      Summarize the state of things: what's done, what's pending, any blockers.
-      Then ask me what I want to focus on next.
+    expansion: "Summarize last session: what's done, what's pending. Then ask what's next."
     confirmation: false
     tags: [review, morning]
 
@@ -80,28 +63,17 @@ commands:
   # === GIT & VERSION CONTROL ===
 
   - phrase: "draw the sucker"
-    expansion: |
-      Pull the latest changes from the remote repository.
-      If there are merge conflicts, show them to me but don't resolve automatically.
-      After pulling, summarize what changed: new commits, files modified.
+    expansion: "Run: git pull. Show what changed."
     confirmation: false
     tags: [git, sync]
 
   - phrase: "the blood dried"
-    expansion: |
-      Commit all current changes with a well-crafted commit message.
-      Analyze the diff to understand what changed.
-      Write a commit message that explains WHY, not just WHAT.
-      Stage all changes (including untracked files that aren't in .gitignore).
-      Show me the message before committing.
+    expansion: "Stage all changes, write a good commit message, and commit. Show the message first."
     confirmation: true
     tags: [git, commit]
 
   - phrase: "he wore the bloody scalp"
-    expansion: |
-      Push the current branch to remote.
-      If the branch doesn't have an upstream, set it.
-      Show me what commits are being pushed.
+    expansion: "Run: git push. Set upstream if needed."
     confirmation: true
     tags: [git, push]
 
@@ -194,14 +166,7 @@ commands:
     tags: [research, deep]
 
   - phrase: "the kid looked at the expanse before him"
-    expansion: |
-      Survey the current project:
-      - File structure overview
-      - Key technologies and dependencies
-      - Recent git activity (last 5 commits)
-      - Any obvious issues (failing tests, lint errors)
-      - Open TODOs in the codebase
-      Give me the lay of the land.
+    expansion: "Survey this project: file structure, dependencies, recent commits. Brief overview only."
     confirmation: false
     tags: [survey, status]
 

@@ -117,7 +117,8 @@ FALLBACK_ENABLED = True
 AUTO_PLAIN = False
 
 # Global dangerous mode flag (skip Claude permission prompts)
-DANGEROUS_MODE = False
+# Default True - skip Claude permission prompts for smoother UX
+DANGEROUS_MODE = True
 
 # Global retry mode flag (enabled by default)
 RETRY_ENABLED = True
@@ -2215,7 +2216,13 @@ def main():
     parser.add_argument(
         "--dangerous",
         action="store_true",
-        help="Skip Claude permission prompts (use with caution)"
+        default=True,
+        help="Skip Claude permission prompts (default: enabled)"
+    )
+    parser.add_argument(
+        "--safe",
+        action="store_true",
+        help="Enable Claude permission prompts (disables --dangerous)"
     )
     parser.add_argument(
         "--streaming",
@@ -2298,7 +2305,7 @@ def main():
         return
 
     if is_first_run():
-        show_welcome(first_run=True)
+        run_setup_wizard()
         mark_first_run_complete()
         return
 
@@ -2309,7 +2316,7 @@ def main():
     TIMING_MODE = args.timing
     WARM_MODE = args.warm and not args.no_warm  # --no-warm overrides --warm
     AUTO_PLAIN = args.auto_plain
-    DANGEROUS_MODE = args.dangerous
+    DANGEROUS_MODE = args.dangerous and not args.safe  # --safe overrides
     STREAMING_STT_MODE = args.streaming and not args.no_streaming  # --no-streaming overrides
     LIVE_ENDPOINTING_MODE = args.live  # Stream audio live, stop when speech ends
     if args.no_retry:
