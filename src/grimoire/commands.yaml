@@ -62,12 +62,7 @@ commands:
   # === TESTING & QUALITY ===
 
   - phrase: "the judge smiled"
-    expansion: |
-      Run the test suite for this project.
-      Detect the test framework automatically (pytest, jest, go test, etc).
-      Show me a summary: total tests, passed, failed, skipped.
-      If any tests fail, show the failure details clearly.
-      Don't fix anything yet, just report.
+    expansion: "Run pytest -v once and show the output. Do not retry or re-run."
     confirmation: false
     tags: [testing]
 

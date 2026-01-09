@@ -730,7 +730,9 @@ def transcribe_audio(audio_data: bytes) -> str:
     Send audio to Deepgram for transcription.
     Uses keyword boosting for grimoire phrases.
     """
-    api_key = os.environ.get("DEEPGRAM_API_KEY")
+    # Try config first, then env var
+    from config import get_config
+    api_key = get_config().deepgram_api_key or os.environ.get("DEEPGRAM_API_KEY")
     if not api_key:
         print(f"{Colors.RED}[E{ErrorCode.STT_NO_API_KEY}] DEEPGRAM_API_KEY not set{Colors.RESET}")
         print(f"{Colors.DIM}  Run: export DEEPGRAM_API_KEY='your-key-here'{Colors.RESET}")
@@ -824,7 +826,9 @@ def _transcribe_audio_single(audio_data: bytes) -> str:
     Single transcription attempt. Raises TranscriptionError on failure.
     Used internally by transcribe_audio_with_retry.
     """
-    api_key = os.environ.get("DEEPGRAM_API_KEY")
+    # Try config first, then env var
+    from config import get_config
+    api_key = get_config().deepgram_api_key or os.environ.get("DEEPGRAM_API_KEY")
     if not api_key:
         raise TranscriptionError(
             f"[E{ErrorCode.STT_NO_API_KEY}] DEEPGRAM_API_KEY not set",
@@ -1620,7 +1624,8 @@ def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: s
                 # Live streaming mode: stream audio to Deepgram, stop when speech ends
                 print(f"{Colors.BLUE}Recording... (speak, then pause){Colors.RESET}")
                 from streaming_stt import transcribe_live_with_endpointing
-                api_key = os.environ.get("DEEPGRAM_API_KEY")
+                from config import get_config
+                api_key = get_config().deepgram_api_key or os.environ.get("DEEPGRAM_API_KEY")
                 transcript = transcribe_live_with_endpointing(
                     audio_stream=stream,
                     frame_length=frame_length,
