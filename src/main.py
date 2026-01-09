@@ -160,6 +160,12 @@ SEMANTIC_MODE = False
 # Global streaming STT mode flag (default: True - WebSocket streaming for lower latency)
 STREAMING_STT_MODE = True
 
+# Global live endpointing mode (stream audio live, stop when speech ends)
+# When True: Streams audio to Deepgram in real-time, stops when endpointing detected
+# When False: Records for fixed RECORD_SECONDS duration, then transcribes
+# Enable with --live flag. Saves 1-4 seconds on short commands.
+LIVE_ENDPOINTING_MODE = False
+
 # Global SDK mode flag (default: False until fully tested)
 # When True, uses the orchestrator with specialized subagents
 # When False, falls back to subprocess.Popen("claude -p ...")
@@ -1848,29 +1854,47 @@ def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: s
                 input(f"\n{Colors.DIM}[Press Enter to speak...]{Colors.RESET}")
                 ping_heard()
 
-            print(f"{Colors.BLUE}Recording... ({RECORD_SECONDS} seconds){Colors.RESET}")
-            frames = []
-            for _ in range(int(sample_rate / frame_length * RECORD_SECONDS)):
-                data = stream.read(frame_length, exception_on_overflow=False)
-                frames.append(data)
-
-            print(f"{Colors.DIM}Processing...{Colors.RESET}")
-
-            # Convert to WAV
-            import wave
-            import io
-            buffer = io.BytesIO()
-            with wave.open(buffer, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(sample_rate)
-                wf.writeframes(b''.join(frames))
-            audio_data = buffer.getvalue()
-
-            # Transcribe with timing and retry logic
+            # Transcribe with timing
             stt_timer = timing.timer("STT")
             stt_timer.start()
-            transcript, stt_success = transcribe_audio_with_retry(audio_data)
+
+            if LIVE_ENDPOINTING_MODE:
+                # Live streaming mode: stream audio to Deepgram, stop when speech ends
+                print(f"{Colors.BLUE}Recording... (speak, then pause){Colors.RESET}")
+                from streaming_stt import transcribe_live_with_endpointing
+                api_key = os.environ.get("DEEPGRAM_API_KEY")
+                transcript = transcribe_live_with_endpointing(
+                    audio_stream=stream,
+                    frame_length=frame_length,
+                    api_key=api_key,
+                    endpointing_ms=300,
+                    max_duration=30.0,
+                )
+                stt_success = bool(transcript)
+            else:
+                # Fixed duration mode: record for RECORD_SECONDS, then transcribe
+                print(f"{Colors.BLUE}Recording... ({RECORD_SECONDS} seconds){Colors.RESET}")
+                frames = []
+                for _ in range(int(sample_rate / frame_length * RECORD_SECONDS)):
+                    data = stream.read(frame_length, exception_on_overflow=False)
+                    frames.append(data)
+
+                print(f"{Colors.DIM}Processing...{Colors.RESET}")
+
+                # Convert to WAV
+                import wave
+                import io
+                buffer = io.BytesIO()
+                with wave.open(buffer, 'wb') as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(sample_rate)
+                    wf.writeframes(b''.join(frames))
+                audio_data = buffer.getvalue()
+
+                # Transcribe
+                transcript, stt_success = transcribe_audio_with_retry(audio_data)
+
             stt_timer.stop()
 
             # Handle transcription failure with re-record option
@@ -2447,6 +2471,11 @@ def main():
         help="Use batch HTTP STT instead of streaming WebSocket"
     )
     parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Stream audio live to Deepgram, stop when speech ends (saves 1-4s per command)"
+    )
+    parser.add_argument(
         "--context",
         type=str,
         metavar="PATH",
@@ -2538,6 +2567,7 @@ def main():
     DANGEROUS_MODE = args.dangerous
     SEMANTIC_MODE = args.semantic
     STREAMING_STT_MODE = args.streaming and not args.no_streaming  # --no-streaming overrides
+    LIVE_ENDPOINTING_MODE = args.live  # Stream audio live, stop when speech ends
     SDK_MODE = args.sdk and not args.no_sdk  # --no-sdk overrides --sdk
     if args.no_retry:
         RETRY_ENABLED = False

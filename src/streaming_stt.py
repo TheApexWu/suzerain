@@ -12,6 +12,7 @@ import json
 import os
 import struct
 import threading
+import time
 import wave
 from io import BytesIO
 from typing import Callable, Optional
@@ -275,6 +276,272 @@ class LiveTranscriber:
         if self._thread:
             self._thread.join(timeout=2.0)
         return self.transcript
+
+
+class EndpointingTranscriber:
+    """
+    Real-time transcription with automatic endpointing detection.
+
+    Streams audio live to Deepgram and automatically stops when
+    speech ends (detected via endpointing parameter).
+
+    Usage:
+        transcriber = EndpointingTranscriber(api_key)
+        transcriber.start()
+        while transcriber.is_recording():
+            chunk = mic.read(...)
+            transcriber.feed(chunk)
+        transcript = transcriber.get_transcript()
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        keywords: list = None,
+        endpointing_ms: int = 300,
+        max_duration: float = 30.0,
+        on_interim: Optional[Callable[[str], None]] = None,
+    ):
+        """
+        Initialize endpointing transcriber.
+
+        Args:
+            api_key: Deepgram API key
+            keywords: Optional keyword boosts
+            endpointing_ms: Silence duration (ms) to trigger end (default: 300)
+            max_duration: Maximum recording time in seconds (default: 30)
+            on_interim: Callback for interim transcripts
+        """
+        self.api_key = api_key
+        self.keywords = keywords
+        self.endpointing_ms = endpointing_ms
+        self.max_duration = max_duration
+        self.on_interim = on_interim
+
+        self._websocket = None
+        self._loop = None
+        self._thread = None
+        self._queue = None
+        self._speech_ended = threading.Event()
+        self._connected = threading.Event()
+        self._final_transcript = ""
+        self._interim_transcript = ""
+        self._start_time = None
+
+    def _build_url(self) -> str:
+        """Build WebSocket URL with endpointing enabled."""
+        params = [
+            "model=nova-2",
+            "sample_rate=16000",
+            "channels=1",
+            "encoding=linear16",
+            "smart_format=true",
+            "punctuate=true",
+            f"endpointing={self.endpointing_ms}",
+            "utterance_end_ms=1000",  # Also listen for utterance end
+        ]
+
+        if self.keywords:
+            kw_str = ",".join(self.keywords)
+            params.append(f"keywords={kw_str}")
+
+        return f"{DEEPGRAM_WS_URL}?{'&'.join(params)}"
+
+    def start(self):
+        """Start the transcription session."""
+        import queue
+        self._queue = queue.Queue()
+        self._speech_ended.clear()
+        self._connected.clear()
+        self._final_transcript = ""
+        self._interim_transcript = ""
+        self._start_time = time.time()
+
+        def run_loop():
+            self._loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._loop)
+            self._loop.run_until_complete(self._run())
+
+        self._thread = threading.Thread(target=run_loop, daemon=True)
+        self._thread.start()
+
+        # Wait for connection to be established
+        self._connected.wait(timeout=5.0)
+
+    async def _run(self):
+        """Main async loop - connect, stream, and detect endpointing."""
+        url = self._build_url()
+
+        try:
+            self._websocket = await websockets.connect(
+                url,
+                additional_headers={"Authorization": f"Token {self.api_key}"},
+                ping_interval=5,
+                ping_timeout=20,
+            )
+            self._connected.set()
+
+            # Start receive task
+            receive_task = asyncio.create_task(self._receive_loop())
+            send_task = asyncio.create_task(self._send_loop())
+
+            # Wait for either task to complete
+            done, pending = await asyncio.wait(
+                [receive_task, send_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # Cancel pending tasks
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            # Close connection
+            if self._websocket:
+                await self._websocket.send(json.dumps({"type": "CloseStream"}))
+                await asyncio.sleep(0.1)
+                await self._websocket.close()
+
+        except Exception as e:
+            print(f"[EndpointingTranscriber error: {e}]")
+            self._speech_ended.set()
+
+    async def _receive_loop(self):
+        """Receive transcription results and detect endpointing."""
+        try:
+            async for message in self._websocket:
+                data = json.loads(message)
+                msg_type = data.get("type", "")
+
+                if msg_type == "Results":
+                    channel = data.get("channel", {})
+                    alternatives = channel.get("alternatives", [{}])
+                    transcript = alternatives[0].get("transcript", "")
+                    is_final = data.get("is_final", False)
+                    speech_final = data.get("speech_final", False)
+
+                    if transcript:
+                        if is_final:
+                            self._final_transcript += " " + transcript
+                            self._interim_transcript = ""
+                        else:
+                            self._interim_transcript = transcript
+                            if self.on_interim:
+                                self.on_interim(transcript)
+
+                    # Endpointing detected!
+                    if speech_final:
+                        self._speech_ended.set()
+                        return
+
+                elif msg_type == "UtteranceEnd":
+                    # Alternative endpointing signal
+                    self._speech_ended.set()
+                    return
+
+        except websockets.exceptions.ConnectionClosed:
+            self._speech_ended.set()
+
+    async def _send_loop(self):
+        """Send audio chunks from queue to Deepgram."""
+        import queue as queue_module
+
+        while not self._speech_ended.is_set():
+            # Check max duration
+            if time.time() - self._start_time > self.max_duration:
+                self._speech_ended.set()
+                return
+
+            try:
+                audio = self._queue.get_nowait()
+                if audio is None:  # Manual stop signal
+                    self._speech_ended.set()
+                    return
+                await self._websocket.send(audio)
+            except queue_module.Empty:
+                await asyncio.sleep(0.01)
+
+    def feed(self, audio_chunk: bytes):
+        """Feed audio chunk to transcriber."""
+        if self._queue and not self._speech_ended.is_set():
+            self._queue.put(audio_chunk)
+
+    def is_recording(self) -> bool:
+        """Check if still recording (speech not ended)."""
+        return not self._speech_ended.is_set()
+
+    def stop(self):
+        """Manually stop recording."""
+        self._speech_ended.set()
+        if self._queue:
+            self._queue.put(None)
+        if self._thread:
+            self._thread.join(timeout=2.0)
+
+    def get_transcript(self) -> str:
+        """Get final transcript after recording ends."""
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+        return self._final_transcript.strip()
+
+
+def transcribe_live_with_endpointing(
+    audio_stream,
+    frame_length: int,
+    api_key: str = None,
+    keywords: list = None,
+    endpointing_ms: int = 300,
+    max_duration: float = 30.0,
+    on_interim: Optional[Callable[[str], None]] = None,
+) -> str:
+    """
+    Transcribe live audio with automatic endpointing.
+
+    Streams audio from microphone to Deepgram until speech ends.
+    Returns the final transcript.
+
+    Args:
+        audio_stream: PyAudio stream to read from
+        frame_length: Samples per frame
+        api_key: Deepgram API key (uses env var if not provided)
+        keywords: Optional keyword boosts
+        endpointing_ms: Silence duration to trigger end (default: 300)
+        max_duration: Maximum recording time in seconds
+        on_interim: Callback for interim transcripts
+
+    Returns:
+        Transcribed text
+    """
+    import time
+
+    if api_key is None:
+        api_key = os.environ.get("DEEPGRAM_API_KEY")
+
+    if not api_key:
+        return ""
+
+    transcriber = EndpointingTranscriber(
+        api_key=api_key,
+        keywords=keywords,
+        endpointing_ms=endpointing_ms,
+        max_duration=max_duration,
+        on_interim=on_interim,
+    )
+
+    transcriber.start()
+
+    # Stream audio until speech ends
+    while transcriber.is_recording():
+        try:
+            data = audio_stream.read(frame_length, exception_on_overflow=False)
+            transcriber.feed(data)
+        except Exception:
+            break
+
+    return transcriber.get_transcript()
 
 
 # === CLI for testing ===
