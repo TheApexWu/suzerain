@@ -43,9 +43,18 @@ htmlcov/
 
 # Secrets - NEVER COMMIT
 .env
+.env.*
 *.pem
 *.key
 credentials.json
+config.yaml
+config.yml
+
+# Suzerain user data (should be in ~/.suzerain, but just in case)
+.suzerain/
+.first_run_complete
+command_history.json
+metrics.json
 
 # OS
 .DS_Store
