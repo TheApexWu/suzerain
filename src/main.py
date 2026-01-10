@@ -2454,8 +2454,8 @@ def main():
         "--local-model",
         type=str,
         choices=["tiny.en", "base.en", "small.en", "medium.en"],
-        default="small.en",
-        help="Whisper model size for local STT (default: small.en)"
+        default=None,
+        help="Whisper model size for local STT (implies --local, default: small.en)"
     )
     parser.add_argument(
         "--context",
@@ -2536,11 +2536,13 @@ def main():
     DANGEROUS_MODE = args.dangerous and not args.safe  # --safe overrides
     STREAMING_STT_MODE = args.streaming and not args.no_streaming  # --no-streaming overrides
     LIVE_ENDPOINTING_MODE = args.live  # Stream audio live, stop when speech ends
-    # v0.5: Local Whisper STT - CLI flag overrides config
+    # v0.5: Local Whisper STT - CLI flags override config
     from config import get_config
     config = get_config()
-    LOCAL_STT_MODE = args.local or config.local_stt_enabled
-    LOCAL_STT_MODEL = args.local_model if args.local else config.local_stt_model
+    # --local-model implies --local
+    LOCAL_STT_MODE = args.local or args.local_model is not None or config.local_stt_enabled
+    # Priority: CLI model > config model > default
+    LOCAL_STT_MODEL = args.local_model or config.local_stt_model or "small.en"
     if args.no_retry:
         RETRY_ENABLED = False
     if args.no_fallback:
