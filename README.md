@@ -2,23 +2,30 @@
 
 > *"Whatever exists without my knowledge exists without my consent."*
 
-**What kind of AI ruler are you?**
+**Interactive behavioral analysis mapping your AI tool usage to 10,000 years of political history.**
 
 ---
 
-## The Idea
+## The Question
 
-You use AI coding tools every day. But how do you govern them?
+You use AI coding tools every day. But *how* do you govern them?
 
-Suzerain analyzes your behavior and maps it to historical governance styles:
+- Do you approve every action, or trust the machine?
+- Do you intervene constantly, or let it run?
+- Do you follow rigid rules, or adapt on the fly?
 
-- **Roman Emperor** — You approve everything. Efficient, but you're the bottleneck.
-- **Venetian Republic** — Distributed trust with checks and balances.
-- **Athenian Democracy** — Transparent, deliberative, everyone debates.
-- **Mongol Horde** — Fast and autonomous. Trust your generals.
-- **Constitutional Monarchy** — Rules-based with limited autonomy.
+Suzerain reveals your governance pattern and maps it to historical archetypes:
 
-Understand your patterns. Learn from 10,000 years of governance experiments.
+| Archetype | Pattern | Historical Parallel |
+|-----------|---------|---------------------|
+| **Autocrat** | Approve everything manually | Roman Emperor — effective but fragile |
+| **Council** | Context-dependent trust | Venetian Republic — lasted 1000 years |
+| **Deliberator** | Slow, thoughtful, high correction | Athenian Assembly — thorough but slow |
+| **Delegator** | Fast, autonomous, full trust | Mongol yasa — speed over safety |
+| **Constitutionalist** | Rules-based, predictable | Constitutional systems — stable but rigid |
+| **Strategist** | Control the what, delegate the how | Napoleon — leverage through focus |
+
+Learn from civilizations that tried your approach. See what worked. See what collapsed.
 
 ---
 
@@ -27,20 +34,27 @@ Understand your patterns. Learn from 10,000 years of governance experiments.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                                                         │
-│   Your Governance Style: ROMAN EMPEROR                  │
+│   Your Governance Style: AUTOCRAT                       │
+│   Context: Production / Security                        │
 │                                                         │
 │   You approved 94% of actions manually.                 │
-│   Intervention rate: High                               │
-│   Trust delegation: Low                                 │
+│   Decision time: 2.4s average (deliberate)              │
+│   Trust delegation: Low across all contexts             │
 │                                                         │
-│   Strengths: Control, consistency, quality              │
-│   Weaknesses: Bottleneck, doesn't scale, burnout        │
+│   Strengths for your context:                           │
+│   ✅ Quality control — every output reviewed            │
+│   ✅ Appropriate for security-critical work             │
 │                                                         │
-│   Historical parallel: Marcus Aurelius                  │
+│   Weaknesses for your context:                          │
+│   ⚠️ Bottleneck — nothing scales beyond your attention  │
+│   ⚠️ Burnout risk — cognitive load unsustainable        │
+│                                                         │
+│   Historical parallel: Roman Emperor (centralized era)  │
 │   What happened: Empire too dependent on one person     │
 │                                                         │
-│   Try instead: Venetian Republic                        │
-│   → Distribute trust across specialized domains         │
+│   Try instead: STRATEGIST                               │
+│   → Control architecture decisions, delegate impl       │
+│   → Keep security review, automate test generation      │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -71,12 +85,23 @@ The insight isn't in the tool. It's in understanding yourself.
 
 🚧 **In Development**
 
-Building:
-- [ ] Usage data collection (opt-in)
-- [ ] Behavior classification engine
-- [ ] Governance archetype models
-- [ ] Interactive web dashboard
-- [ ] Historical context database
+- [ ] Behavior classification engine (K-Means clustering)
+- [ ] Interactive radar charts (React + D3)
+- [ ] Historical context cards
+- [ ] Style Trials — experiment with different governance patterns
+- [ ] Shareable results
+
+---
+
+## Privacy
+
+**Local-first, opt-in only.**
+
+```
+NEVER collected: prompts, source code, file contents, API keys
+SAFE to collect: aggregate approval rate, archetype classification
+DEFAULT: Off
+```
 
 ---
 
@@ -85,13 +110,6 @@ Building:
 **Suzerain** (n.): A feudal overlord. One who holds sovereignty.
 
 You are the suzerain of your AI tools. But what kind of ruler are you?
-
----
-
-## Links
-
-- [CLAUDE.md](./CLAUDE.md) — Full project vision
-- [suzerain.dev](https://suzerain.dev) — Coming soon
 
 ---
 
