@@ -44,6 +44,7 @@ from parser import (
     validate_grimoire,
     get_command_info
 )
+from agents import route_command, route_intent, AgentType
 
 # Lazy imports for optional modules
 _streaming_stt = None
@@ -74,6 +75,11 @@ from cache import warmup_all, verify_grimoire_cache
 from errors import (
     ErrorCode,
     redact_sensitive
+)
+from session import (
+    log_command as log_session,
+    get_session_context,
+    get_session,
 )
 
 
@@ -156,6 +162,53 @@ SUMMARY_ENABLED = True  # Enable spoken summaries by default
 LOCAL_STT_MODE = False  # Use local Whisper instead of Deepgram
 LOCAL_STT_MODEL = "small.en"  # tiny.en (fastest), base.en, small.en (best balance)
 
+# v0.6: Interrupt detection during Claude execution
+_current_process: 'subprocess.Popen | None' = None  # Track running Claude process
+_interrupt_requested = False  # Flag for interrupt state
+
+# v0.6: Background voice monitor for escape hatches during execution
+_voice_monitor_thread: 'threading.Thread | None' = None
+_voice_monitor_stop = threading.Event()  # Signal to stop monitoring
+VOICE_MONITOR_ENABLED = True  # Can disable with --no-monitor
+VOICE_MONITOR_CHUNK_SECONDS = 1.0  # Listen in 1-second chunks
+VOICE_MONITOR_MODEL = "tiny.en"  # Fastest model for escape hatch detection
+
+# v0.6: Trust/autonomy levels
+# Controls how much confirmation is required before execution
+TRUST_LEVEL = 3  # Default: supervised (confirm destructive only)
+
+class TrustLevel:
+    """Trust level constants and utilities."""
+    PREVIEW = 1     # Show only, never execute
+    EXPLICIT = 2    # Confirm every action
+    SUPERVISED = 3  # Confirm destructive only (default)
+    ASSISTED = 4    # Auto-execute, summarize after
+    AUTONOMOUS = 5  # Full auto, minimal output
+
+    NAMES = {
+        1: "preview",
+        2: "explicit",
+        3: "supervised",
+        4: "assisted",
+        5: "autonomous",
+    }
+
+    DESCRIPTIONS = {
+        1: "Preview mode - show what would happen, never execute",
+        2: "Explicit mode - confirm every action before execution",
+        3: "Supervised mode - confirm destructive actions only",
+        4: "Assisted mode - auto-execute, summarize after",
+        5: "Autonomous mode - full auto, minimal output",
+    }
+
+    @classmethod
+    def name(cls, level: int) -> str:
+        return cls.NAMES.get(level, "unknown")
+
+    @classmethod
+    def description(cls, level: int) -> str:
+        return cls.DESCRIPTIONS.get(level, "unknown")
+
 # Meta-prompt injected into Claude to get concise summaries
 META_SYSTEM_PROMPT = '''
 After completing the task, end your response with a SUMMARY block in this exact format:
@@ -168,6 +221,25 @@ Status: [Success/Failure + brief note if needed]
 
 Keep the summary suitable for text-to-speech (under 15 seconds when spoken).
 '''
+
+# v0.6: Blood Meridian atmospheric quotes
+MERIDIAN_QUOTES = [
+    "Whatever exists without my knowledge exists without my consent.",
+    "The truth about the world is that anything is possible.",
+    "War is god.",
+    "They rode on.",
+    "If God meant to interfere in the degeneracy of mankind, would he not have done so by now?",
+    "Whatever in creation exists without my knowledge exists without my consent.",
+    "The man who believes that the secrets of the world are forever hidden lives in mystery and fear.",
+    "It makes no difference what men think of war. War endures.",
+    "Only that man who has offered up himself entire to the blood of war... can dance.",
+]
+
+
+def get_meridian_quote() -> str:
+    """Get a random Blood Meridian quote for atmosphere."""
+    import random
+    return random.choice(MERIDIAN_QUOTES)
 
 
 # === Timing Utilities ===
@@ -730,6 +802,321 @@ def ping_error():
     ])
 
 
+def ping_interrupt():
+    """Sound for interrupt - 'Stopped'"""
+    _play_system_sound([
+        "/System/Library/Sounds/Basso.aiff",
+        "/System/Library/Sounds/Funk.aiff",
+    ])
+
+
+# === v0.6: Interrupt Detection ===
+
+def request_interrupt():
+    """
+    Request interruption of the current Claude process.
+    Called when user says 'stop', 'hold', 'cancel', etc.
+    """
+    global _interrupt_requested, _current_process
+    _interrupt_requested = True
+
+    if _current_process and _current_process.poll() is None:
+        print(f"\n{Colors.RED}[INTERRUPT] Stopping execution...{Colors.RESET}")
+        ping_interrupt()
+        _current_process.terminate()
+        try:
+            _current_process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            _current_process.kill()
+        return True
+    return False
+
+
+def is_interrupt_requested() -> bool:
+    """Check if an interrupt has been requested."""
+    return _interrupt_requested
+
+
+def clear_interrupt():
+    """Clear the interrupt flag."""
+    global _interrupt_requested
+    _interrupt_requested = False
+
+
+def set_current_process(process: 'subprocess.Popen | None'):
+    """Track the current running Claude process."""
+    global _current_process
+    _current_process = process
+
+
+def check_for_escape_hatch(text: str) -> bool:
+    """
+    Quick check if text contains an escape hatch command.
+    Used for interrupt detection during execution.
+
+    IMPORTANT: Only triggers on ISOLATED utterances (1-2 words max).
+    This prevents false positives like "stop sign app" or
+    "I need the stop button to work".
+
+    Returns True if an escape hatch is detected.
+    """
+    if not text:
+        return False
+
+    # Clean and tokenize
+    words = text.lower().strip().split()
+
+    # Only trigger on isolated utterances (1-2 words max)
+    # This prevents false positives from contextual speech
+    # "stop" → trigger, "stop sign app" → ignore
+    if len(words) > 2:
+        return False
+
+    # Fast check against known escape phrases
+    escape_phrases = {'stop', 'hold', 'cancel', 'pause', 'wait', 'abort'}
+    return bool(set(words) & escape_phrases)
+
+
+# === v0.6: Background Voice Monitor ===
+
+def _voice_monitor_loop():
+    """
+    Background thread that listens for escape hatch commands during Claude execution.
+
+    Records short audio chunks, transcribes with local Whisper (tiny.en),
+    and calls request_interrupt() if escape hatch detected.
+
+    Features:
+    - Energy threshold: Skips silent/quiet chunks to prevent hallucinations
+    - Audio feedback: Plays interrupt sound when escape hatch detected
+    - Graceful errors: Handles mic issues without crashing
+    """
+    import io
+    import wave
+    import numpy as np
+
+    try:
+        import pyaudio
+    except ImportError:
+        # Silently fail - voice monitor is optional enhancement
+        return
+
+    try:
+        from local_stt import transcribe_audio_local
+    except ImportError:
+        # Silently fail - need local STT for monitoring
+        return
+
+    # Audio settings
+    sample_rate = 16000
+    chunk_samples = int(sample_rate * VOICE_MONITOR_CHUNK_SECONDS)
+    frame_length = 1600  # 100ms frames
+
+    # Energy threshold to skip silent chunks (prevents Whisper hallucinations)
+    # RMS energy below this = silence, skip transcription
+    ENERGY_THRESHOLD = 300  # Empirically tuned for typical speech vs silence
+
+    pa = None
+    stream = None
+
+    try:
+        pa = pyaudio.PyAudio()
+
+        # Find default input device
+        try:
+            default_input = pa.get_default_input_device_info()
+        except IOError:
+            # No input device available
+            pa.terminate()
+            return
+
+        stream = pa.open(
+            rate=sample_rate,
+            channels=1,
+            format=pyaudio.paInt16,
+            input=True,
+            frames_per_buffer=frame_length
+        )
+    except Exception:
+        # Mic not available - silently disable voice monitor
+        if pa:
+            try:
+                pa.terminate()
+            except Exception:
+                pass
+        return
+
+    try:
+        while not _voice_monitor_stop.is_set():
+            # Record a short chunk
+            frames = []
+            frames_needed = int(chunk_samples / frame_length)
+
+            for _ in range(frames_needed):
+                if _voice_monitor_stop.is_set():
+                    break
+                try:
+                    data = stream.read(frame_length, exception_on_overflow=False)
+                    frames.append(data)
+                except IOError:
+                    # Buffer overflow or mic disconnected - skip this chunk
+                    break
+                except Exception:
+                    break
+
+            if _voice_monitor_stop.is_set() or not frames:
+                break
+
+            # Combine frames
+            audio_bytes = b''.join(frames)
+
+            # Calculate RMS energy to detect silence
+            audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+            rms_energy = np.sqrt(np.mean(audio_array.astype(np.float32) ** 2))
+
+            # Skip silent chunks - prevents Whisper hallucinations on silence
+            if rms_energy < ENERGY_THRESHOLD:
+                continue
+
+            # Convert to WAV
+            buffer = io.BytesIO()
+            with wave.open(buffer, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(sample_rate)
+                wf.writeframes(audio_bytes)
+            audio_data = buffer.getvalue()
+
+            # Transcribe with tiny.en (fast, ~50ms)
+            try:
+                transcript = transcribe_audio_local(
+                    audio_data,
+                    model_size=VOICE_MONITOR_MODEL
+                )
+            except Exception:
+                continue  # Transcription failed, try next chunk
+
+            # Check for escape hatch (isolated utterance only)
+            if transcript and check_for_escape_hatch(transcript):
+                # Audio feedback - let user know we heard them
+                ping_interrupt()
+                print(f"\n{Colors.YELLOW}[Voice: \"{transcript.strip()}\"]{Colors.RESET}")
+                request_interrupt()
+                break
+
+    finally:
+        # Clean up audio resources
+        if stream:
+            try:
+                stream.stop_stream()
+                stream.close()
+            except Exception:
+                pass
+        if pa:
+            try:
+                pa.terminate()
+            except Exception:
+                pass
+
+
+def start_voice_monitor():
+    """
+    Start background voice monitoring for escape hatches.
+    Call this when Claude execution begins.
+    """
+    global _voice_monitor_thread
+
+    if not VOICE_MONITOR_ENABLED:
+        return
+
+    # Don't start if already running
+    if _voice_monitor_thread and _voice_monitor_thread.is_alive():
+        return
+
+    # Clear the stop signal
+    _voice_monitor_stop.clear()
+
+    # Start the monitor thread
+    _voice_monitor_thread = threading.Thread(
+        target=_voice_monitor_loop,
+        daemon=True,
+        name="VoiceMonitor"
+    )
+    _voice_monitor_thread.start()
+
+
+def stop_voice_monitor():
+    """
+    Stop background voice monitoring.
+    Call this when Claude execution ends.
+    """
+    global _voice_monitor_thread
+
+    if not _voice_monitor_thread:
+        return
+
+    # Signal the thread to stop
+    _voice_monitor_stop.set()
+
+    # Wait for thread to finish (with timeout)
+    if _voice_monitor_thread.is_alive():
+        _voice_monitor_thread.join(timeout=2.0)
+
+    _voice_monitor_thread = None
+
+
+# === v0.6: Trust-Based Execution ===
+
+def should_execute(command: dict) -> tuple[bool, str]:
+    """
+    Determine if command should execute based on trust level.
+
+    Args:
+        command: Grimoire command dict with optional 'destructive' flag
+
+    Returns:
+        Tuple of (should_execute, reason)
+    """
+    global TRUST_LEVEL
+
+    is_destructive = command.get("destructive", False) or command.get("confirmation", False)
+    command_phrase = command.get("phrase", "unknown")
+
+    # Level 1: Preview - never execute
+    if TRUST_LEVEL == TrustLevel.PREVIEW:
+        return False, "Preview mode - execution disabled"
+
+    # Level 2: Explicit - always confirm
+    if TRUST_LEVEL == TrustLevel.EXPLICIT:
+        try:
+            response = input(f"{Colors.YELLOW}Execute '{command_phrase}'? [y/N]: {Colors.RESET}").strip().lower()
+            if response in ('y', 'yes'):
+                return True, "User confirmed"
+            return False, "User declined"
+        except (EOFError, KeyboardInterrupt):
+            return False, "Cancelled"
+
+    # Level 3: Supervised - confirm destructive only
+    if TRUST_LEVEL == TrustLevel.SUPERVISED:
+        if is_destructive:
+            try:
+                response = input(f"{Colors.YELLOW}⚠️  Destructive action '{command_phrase}'. Execute? [y/N]: {Colors.RESET}").strip().lower()
+                if response in ('y', 'yes'):
+                    return True, "User confirmed destructive action"
+                return False, "User declined destructive action"
+            except (EOFError, KeyboardInterrupt):
+                return False, "Cancelled"
+        return True, "Non-destructive, auto-approved"
+
+    # Level 4 & 5: Assisted/Autonomous - always execute
+    return True, "Auto-approved by trust level"
+
+
+def get_trust_level_display() -> str:
+    """Get formatted trust level for display."""
+    return f"{TrustLevel.name(TRUST_LEVEL)} (level {TRUST_LEVEL})"
+
+
 # === v0.4: Summary Extraction and TTS ===
 
 def extract_summary_block(output: str) -> dict | None:
@@ -1239,12 +1626,26 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
     # Expand the command
     expansion = expand_command(command, modifiers)
 
+    # v0.6: Route to specialized agent based on command tags
+    agent_config = route_command(command)
+
+    # v0.6: Enhance prompt with agent-specific instructions
+    if agent_config.meta_prompt_suffix:
+        expansion = f"{expansion}\n\n{agent_config.meta_prompt_suffix}"
+
+    # v0.6: Inject session context for multi-turn awareness
+    session_context = get_session_context()
+    if session_context:
+        expansion = f"{expansion}\n\n{session_context}"
+
     # v0.4: Inject meta-prompt for summary generation
     if SUMMARY_ENABLED:
         expansion = f"{expansion}\n\n{META_SYSTEM_PROMPT}"
 
     print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
     print(f"{Colors.GREEN}Incantation:{Colors.RESET} \"{Colors.BOLD}{command['phrase']}{Colors.RESET}\"")
+    if agent_config.agent_type != AgentType.GENERAL:
+        print(f"{Colors.CYAN}Agent:{Colors.RESET} {agent_config.name}")
     if modifiers:
         print(f"{Colors.MAGENTA}Modifiers:{Colors.RESET} {[m['effect'] for m in modifiers]}")
 
@@ -1305,9 +1706,16 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
     last_output_time = time.perf_counter()
     warning_shown = False
     timeout_reached = False
+    interrupt_reached = False  # v0.6: Track voice interrupt
+
+    # v0.6: Start background voice monitor for escape hatches
+    start_voice_monitor()
 
     # Stream output from Claude
     try:
+        # v0.6: Clear any pending interrupt before starting
+        clear_interrupt()
+
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -1315,6 +1723,9 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
             text=True,
             cwd=project_path  # Run in project context (None = current dir)
         )
+
+        # v0.6: Track process for interrupt handling
+        set_current_process(process)
 
         # Use select for non-blocking reads with timeout checking
         import select
@@ -1333,6 +1744,18 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
             use_select = False
 
         while True:
+            # v0.6: Check for interrupt request (voice "stop" command)
+            if is_interrupt_requested():
+                output_handler.stop_waiting()
+                print(f"\n{Colors.YELLOW}[Interrupted] Stopping execution...{Colors.RESET}")
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                interrupt_reached = True
+                break
+
             # Check for timeout
             current_time = time.perf_counter()
             elapsed_since_output = current_time - last_output_time
@@ -1388,8 +1811,12 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
                 elif process.poll() is not None:
                     break
 
-        if not timeout_reached:
+        if not timeout_reached and not interrupt_reached:
             process.wait()
+
+        # v0.6: Clear process tracking and stop voice monitor
+        set_current_process(None)
+        stop_voice_monitor()
 
         # Stop Claude timer
         if claude_timer:
@@ -1404,7 +1831,10 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
         print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
 
         # Determine success status
-        if timeout_reached:
+        if interrupt_reached:
+            success = False
+            return_code = 130  # Standard interrupt exit code (SIGINT)
+        elif timeout_reached:
             success = False
             return_code = 124  # Standard timeout exit code (same as GNU timeout)
         else:
@@ -1433,6 +1863,8 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
 
     except FileNotFoundError:
         output_handler.stop_waiting()
+        set_current_process(None)  # v0.6: Clear process tracking
+        stop_voice_monitor()  # v0.6: Stop voice monitor
         print(f"{Colors.RED}[E{ErrorCode.CLAUDE_NOT_FOUND}] 'claude' command not found{Colors.RESET}")
         print(f"{Colors.DIM}  Install: npm install -g @anthropic-ai/claude-code{Colors.RESET}")
         print(f"{Colors.DIM}  Then restart your terminal{Colors.RESET}")
@@ -1440,6 +1872,8 @@ def execute_command(command: dict, modifiers: list, dry_run: bool = False, timin
         return (1, None)
     except KeyboardInterrupt:
         output_handler.stop_waiting()
+        set_current_process(None)  # v0.6: Clear process tracking
+        stop_voice_monitor()  # v0.6: Stop voice monitor
         # Gracefully terminate the process
         if 'process' in locals() and process.poll() is None:
             process.terminate()
@@ -1532,8 +1966,14 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
     from config import get_config
     project_path = get_config().project_path
 
+    # v0.6: Start background voice monitor for escape hatches
+    start_voice_monitor()
+
     # Stream output from Claude
     try:
+        # v0.6: Clear any pending interrupt before starting
+        clear_interrupt()
+
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -1541,6 +1981,9 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
             text=True,
             cwd=project_path  # Run in project context (None = current dir)
         )
+
+        # v0.6: Track process for interrupt handling
+        set_current_process(process)
 
         for line in process.stdout:
             line = line.strip()
@@ -1552,6 +1995,10 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
 
         process.wait()
 
+        # v0.6: Clear process tracking and stop voice monitor
+        set_current_process(None)
+        stop_voice_monitor()
+
         # Stop Claude timer
         if claude_timer:
             claude_timer.stop()
@@ -1559,9 +2006,15 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
         # Calculate elapsed time
         elapsed_seconds = time.perf_counter() - start_time
 
+        # v0.6: Check if interrupted
+        interrupted = is_interrupt_requested()
+        if interrupted:
+            clear_interrupt()
+            print(f"\n{Colors.YELLOW}[Interrupted]{Colors.RESET}")
+
         print(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}")
 
-        success = process.returncode == 0
+        success = not interrupted and process.returncode == 0
 
         # Show enhanced summary with tool count
         summary = output_handler.get_summary(elapsed_seconds, success)
@@ -1583,11 +2036,15 @@ def execute_plain_command(transcript: str, timing_report: TimingReport = None) -
         return process.returncode
 
     except FileNotFoundError:
+        set_current_process(None)  # v0.6: Clear process tracking
+        stop_voice_monitor()  # v0.6: Stop voice monitor
         print(f"{Colors.RED}[E{ErrorCode.CLAUDE_NOT_FOUND}] 'claude' command not found{Colors.RESET}")
         print(f"{Colors.DIM}  Install: npm install -g @anthropic-ai/claude-code{Colors.RESET}")
         ping_error()
         return 1
     except KeyboardInterrupt:
+        set_current_process(None)  # v0.6: Clear process tracking
+        stop_voice_monitor()  # v0.6: Stop voice monitor
         print(f"\n\n{Colors.YELLOW}Interrupted.{Colors.RESET}")
         return 130
 
@@ -1626,6 +2083,7 @@ def test_mode():
     print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
     print(f"{Colors.GREEN}SUZERAIN TEST MODE{Colors.RESET}")
     print(f"{Colors.DIM}Type grimoire phrases. Commands: quit, list, help{Colors.RESET}")
+    print(f"{Colors.DIM}\"{get_meridian_quote()}\"{Colors.RESET}")
     print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
 
     # Startup warmup (parallel)
@@ -1725,6 +2183,15 @@ def test_mode():
             conversation_id=conversation_id
         )
 
+        # v0.6: Log to session context for multi-turn memory
+        agent = route_command(command)
+        log_session(
+            phrase=command['phrase'],
+            agent_type=agent.agent_type.value,
+            success=(return_code == 0),
+            conversation_id=conversation_id,
+        )
+
 
 def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: str = "computer"):
     """
@@ -1766,6 +2233,7 @@ def listen_mode(once: bool = False, use_wake_word: bool = False, wake_keyword: s
         print(f"{Colors.DIM}Say \"{wake_keyword}\" to activate. Ctrl+C to exit.{Colors.RESET}")
     else:
         print(f"{Colors.DIM}Press Enter to record. Ctrl+C to exit.{Colors.RESET}")
+    print(f"{Colors.DIM}\"{get_meridian_quote()}\"{Colors.RESET}")
     print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
 
     # Startup warmup (parallel)
@@ -2473,6 +2941,19 @@ def main():
         action="store_true",
         help="Clear sticky project context"
     )
+    parser.add_argument(
+        "--no-monitor",
+        action="store_true",
+        help="Disable background voice monitoring during execution (v0.6 feature)"
+    )
+    parser.add_argument(
+        "--trust",
+        type=int,
+        choices=[1, 2, 3, 4, 5],
+        default=None,
+        metavar="LEVEL",
+        help="Trust level 1-5: 1=preview, 2=explicit, 3=supervised (default), 4=assisted, 5=autonomous"
+    )
 
     args = parser.parse_args()
 
@@ -2529,6 +3010,7 @@ def main():
     # Set global flags FIRST (before any early exits)
     global SANDBOX_MODE, TIMING_MODE, RETRY_ENABLED, FALLBACK_ENABLED, WARM_MODE, AUTO_PLAIN, DANGEROUS_MODE
     global STREAMING_STT_MODE, LIVE_ENDPOINTING_MODE, SUMMARY_ENABLED, LOCAL_STT_MODE, LOCAL_STT_MODEL
+    global VOICE_MONITOR_ENABLED
     SANDBOX_MODE = args.sandbox
     TIMING_MODE = args.timing
     WARM_MODE = args.warm and not args.no_warm  # --no-warm overrides --warm
@@ -2549,6 +3031,15 @@ def main():
         FALLBACK_ENABLED = False
     if args.no_summary:
         SUMMARY_ENABLED = False
+    if args.no_monitor:
+        VOICE_MONITOR_ENABLED = False
+
+    # v0.6: Trust level - CLI overrides config
+    global TRUST_LEVEL
+    if args.trust is not None:
+        TRUST_LEVEL = args.trust
+    else:
+        TRUST_LEVEL = config.trust_level
 
     if args.validate:
         sys.exit(validate_mode())
@@ -2574,6 +3065,13 @@ def main():
         print(f"{Colors.YELLOW}{'=' * 50}{Colors.RESET}")
         print(f"{Colors.YELLOW}   SANDBOX MODE - No commands will execute{Colors.RESET}")
         print(f"{Colors.YELLOW}{'=' * 50}{Colors.RESET}\n")
+
+    # Show trust level if not default
+    if TRUST_LEVEL != TrustLevel.SUPERVISED:
+        color = Colors.GREEN if TRUST_LEVEL >= TrustLevel.ASSISTED else Colors.YELLOW
+        print(f"{color}{'=' * 50}{Colors.RESET}")
+        print(f"{color}   TRUST: {TrustLevel.description(TRUST_LEVEL)}{Colors.RESET}")
+        print(f"{color}{'=' * 50}{Colors.RESET}\n")
 
     if args.warm:
         print(f"{Colors.BLUE}{'=' * 50}{Colors.RESET}")

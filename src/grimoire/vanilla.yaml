@@ -6,7 +6,8 @@
 # To use: Copy this file to commands.yaml or modify parser.py to load it.
 
 commands:
-  # === ESCAPE HATCH ===
+  # === ESCAPE HATCH (Priority 0 - bypass fuzzy matching) ===
+  # These commands are checked FIRST with exact matching for immediate response.
 
   - phrase: "stop"
     expansion: |
@@ -26,9 +27,43 @@ commands:
     tags: [escape, cancel, stop]
     is_escape_hatch: true
 
+  - phrase: "hold"
+    expansion: |
+      STOP. Cancel the current operation immediately.
+      Do not execute any pending actions.
+      Acknowledge with "Holding." and wait for further instructions.
+    confirmation: false
+    tags: [escape, cancel, stop]
+    is_escape_hatch: true
+
+  - phrase: "pause"
+    expansion: |
+      Pause the current operation. Do not terminate, just suspend.
+      Acknowledge with "Paused." and wait for "resume" or "continue".
+    confirmation: false
+    tags: [escape, pause]
+    is_escape_hatch: true
+
+  - phrase: "wait"
+    expansion: |
+      Pause the current operation. Do not terminate, just suspend.
+      Acknowledge with "Waiting." and wait for further instructions.
+    confirmation: false
+    tags: [escape, pause]
+    is_escape_hatch: true
+
+  - phrase: "never mind"
+    expansion: |
+      Cancel and forget the last command. Don't execute anything.
+      Acknowledge with "Cancelled." and wait for a new command.
+    confirmation: false
+    tags: [escape, cancel]
+    is_escape_hatch: true
+
   # === DEPLOYMENT ===
 
   - phrase: "deploy to production"
+    aliases: ["the evening redness in the west"]
     expansion: |
       Deploy this project to production. Follow this sequence strictly:
       1. Run the full test suite
@@ -41,6 +76,7 @@ commands:
     tags: [deploy, production, critical]
 
   - phrase: "deploy to staging"
+    aliases: ["the phantom band played on the ridge"]
     expansion: |
       Deploy to staging/preview environment, not production.
       Run tests first. Show me the preview URL when done.
@@ -64,6 +100,7 @@ commands:
   # === CONTINUATION ===
 
   - phrase: "continue"
+    aliases: ["they rode on"]
     expansion: |
       Continue exactly where you left off in the previous task.
       Don't ask clarifying questions unless absolutely necessary.
@@ -102,6 +139,7 @@ commands:
   # === TESTING ===
 
   - phrase: "run tests"
+    aliases: ["the judge smiled"]
     expansion: |
       Run the test suite for this project.
       Detect the test framework automatically (pytest, jest, go test, etc).
@@ -131,6 +169,7 @@ commands:
   # === GIT ===
 
   - phrase: "git pull"
+    aliases: ["draw the sucker"]
     expansion: |
       Pull the latest changes from the remote repository.
       If there are merge conflicts, show them to me but don't resolve automatically.

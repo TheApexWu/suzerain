@@ -1,0 +1,365 @@
+# ============================================================================
+# SUZERAIN CONSTITUTION
+# ============================================================================
+# Personal sovereignty over your AI agents.
+#
+# "Whatever exists without my knowledge exists without my consent."
+# With this constitution, everything exists WITH your consent.
+#
+# This file defines YOUR rules for how AI tools operate in your environment.
+# It governs Claude Code, Cursor, Aider, and any tool that respects hooks.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# IDENTITY
+# ----------------------------------------------------------------------------
+# Who does this constitution apply to?
+
+identity:
+  name: "Personal Development Environment"
+  owner: "amadeus"
+  version: "1.0.0"
+
+  # Inherit from organizational constitution (optional)
+  # inherits_from: "https://github.com/myorg/ai-policy/constitution.yaml"
+
+# ----------------------------------------------------------------------------
+# TRUST LEVELS
+# ----------------------------------------------------------------------------
+# How much autonomy do you grant?
+#
+# Level 1 (OBSERVE):    Show only, never execute
+# Level 2 (EXPLICIT):   Confirm every action
+# Level 3 (SUPERVISED): Confirm destructive only (recommended)
+# Level 4 (ASSISTED):   Auto-execute, summarize after
+# Level 5 (AUTONOMOUS): Full auto, minimal output
+
+trust:
+  default_level: 3  # SUPERVISED
+
+  # Override by context
+  contexts:
+    production:
+      level: 2           # Always explicit for prod
+      require_voice_confirm: true
+
+    testing:
+      level: 4           # More autonomous for tests
+
+    exploration:
+      level: 5           # Full auto for research
+
+  # Override by time (prevent 3am mistakes)
+  time_restrictions:
+    - hours: "22:00-06:00"
+      max_level: 2       # Late night = more careful
+      reason: "Night owl protection"
+
+# ----------------------------------------------------------------------------
+# POLICY RULES
+# ----------------------------------------------------------------------------
+# What actions are allowed, forbidden, or require confirmation?
+
+policy:
+  # Actions that NEVER execute (hard blocklist)
+  forbidden:
+    commands:
+      - "rm -rf /"
+      - "rm -rf ~"
+      - "sudo rm"
+      - ":(){ :|:& };:"    # Fork bomb
+      - "mkfs"
+      - "dd if=/dev"
+      - "> /dev/sda"
+      - "chmod -R 777 /"
+
+    patterns:
+      - "curl .* | .*sh"   # Pipe to shell
+      - "wget .* | .*sh"
+      - "\\$\\(curl"       # Command substitution with curl
+      - "eval.*\\$"        # Eval with variables
+
+    actions:
+      - "push --force to main"
+      - "push --force to master"
+      - "drop database"
+      - "truncate.*production"
+
+  # Actions that ALWAYS require voice/keyboard confirmation
+  require_confirmation:
+    commands:
+      - "git push"
+      - "git push --force"
+      - "npm publish"
+      - "docker push"
+
+    actions:
+      - "deploy"
+      - "publish"
+      - "delete"
+      - "production"
+
+    # Confirm if touching these paths
+    paths:
+      - "*.env*"
+      - "*secret*"
+      - "*credential*"
+      - "*password*"
+      - ".ssh/*"
+      - "~/.aws/*"
+
+  # Actions that execute without confirmation at trust level 3+
+  auto_allow:
+    commands:
+      - "git status"
+      - "git diff"
+      - "git log"
+      - "ls"
+      - "cat"
+      - "grep"
+      - "find"
+      - "pytest"
+      - "npm test"
+      - "npm run lint"
+      - "ruff check"
+
+    actions:
+      - "read"
+      - "analyze"
+      - "explain"
+      - "test"
+      - "lint"
+      - "format"
+
+    # Safe paths (can always read/write within trust level)
+    paths:
+      - "src/*"
+      - "tests/*"
+      - "docs/*"
+      - "*.md"
+      - "*.py"
+      - "*.js"
+      - "*.ts"
+
+# ----------------------------------------------------------------------------
+# VOICE GOVERNANCE
+# ----------------------------------------------------------------------------
+# Commands you can speak to control all AI agents in real-time.
+# These are GOVERNANCE commands, not task commands.
+
+voice:
+  # Wake word to enter governance mode
+  wake_word: "suzerain"
+
+  # Control commands (work across ALL agents)
+  commands:
+    # Emergency stop - highest priority, shortest phrase
+    - phrase: "hold"
+      action: "pause_all"
+      description: "Pause all AI agent activity immediately"
+      priority: 1
+
+    - phrase: "stop"
+      action: "pause_all"
+      priority: 1
+
+    - phrase: "cancel"
+      action: "abort_current"
+      description: "Abort current operation, keep session"
+      priority: 1
+
+    # Resume operations
+    - phrase: "resume"
+      action: "resume_all"
+      description: "Continue paused operations"
+
+    - phrase: "continue"
+      action: "resume_all"
+
+    # Transparency commands
+    - phrase: "explain"
+      action: "explain_current"
+      description: "What are you doing right now?"
+
+    - phrase: "status"
+      action: "show_status"
+      description: "Show all active agents and their state"
+
+    - phrase: "what did you do"
+      action: "show_last_action"
+      description: "Summarize last completed action"
+
+    # Trust adjustments
+    - phrase: "be careful"
+      action: "decrease_trust"
+      description: "Temporarily lower trust level"
+
+    - phrase: "full auto"
+      action: "increase_trust"
+      description: "Temporarily raise trust level"
+      requires_confirmation: true
+
+    # Rollback
+    - phrase: "undo"
+      action: "rollback_last"
+      description: "Revert last action if possible"
+      requires_confirmation: true
+
+    - phrase: "rollback"
+      action: "rollback_last"
+      requires_confirmation: true
+
+    # Redirect
+    - phrase: "forget that"
+      action: "discard_current"
+      description: "Discard current operation, don't execute"
+
+    - phrase: "do something else"
+      action: "prompt_redirect"
+      description: "Stop current, ask for new task"
+
+  # Literary aliases (Blood Meridian heritage - optional aesthetic)
+  aliases:
+    "the judge watches": "explain"
+    "they rode on": "continue"
+    "whatever in creation exists": "status"
+    "hold what you have": "hold"
+
+# ----------------------------------------------------------------------------
+# SCOPE RESTRICTIONS
+# ----------------------------------------------------------------------------
+# Where can AI agents operate?
+
+scope:
+  # Filesystem boundaries
+  filesystem:
+    allowed:
+      - "${CWD}"           # Current working directory
+      - "${CWD}/**"        # And subdirectories
+      - "~/.config/suzerain"
+
+    forbidden:
+      - "~/.ssh"
+      - "~/.aws"
+      - "~/.gnupg"
+      - "/etc"
+      - "/var"
+      - "/usr"
+
+  # Network restrictions
+  network:
+    allowed_hosts:
+      - "api.anthropic.com"
+      - "api.openai.com"
+      - "api.deepgram.com"
+      - "github.com"
+      - "*.githubusercontent.com"
+      - "pypi.org"
+      - "npmjs.com"
+
+    forbidden_hosts:
+      - "*.ru"
+      - "*.cn"
+      - "pastebin.com"
+
+  # Git restrictions
+  git:
+    allowed_remotes:
+      - "origin"
+    forbidden_branches:
+      - "main"       # Can't push directly
+      - "master"
+      - "production"
+    require_pr: true # All changes via PR
+
+# ----------------------------------------------------------------------------
+# AUDIT REQUIREMENTS
+# ----------------------------------------------------------------------------
+# What gets logged for compliance and review?
+
+audit:
+  enabled: true
+
+  # Where to store audit logs
+  storage:
+    type: "local"          # local | remote | git
+    path: ".suzerain/audit"
+    rotate_days: 30
+
+  # What to log
+  log:
+    all_commands: true     # Every command executed
+    confirmations: true    # User confirmations
+    denials: true          # Blocked actions
+    file_changes: true     # Files created/modified/deleted
+    cost: true             # Token usage and estimated cost
+
+  # Sensitive data handling
+  redact:
+    - "password"
+    - "secret"
+    - "token"
+    - "key"
+    - "credential"
+    - "api_key"
+
+# ----------------------------------------------------------------------------
+# AGENTS
+# ----------------------------------------------------------------------------
+# Configuration for specific AI tools under your governance.
+
+agents:
+  claude_code:
+    enabled: true
+    hook_path: "~/.claude/hooks/suzerain.py"
+    permission_mode: "default"  # Let constitution override
+
+  cursor:
+    enabled: false  # Coming soon
+
+  aider:
+    enabled: false  # Coming soon
+
+# ----------------------------------------------------------------------------
+# NOTIFICATIONS
+# ----------------------------------------------------------------------------
+# How do you want to be informed?
+
+notifications:
+  # Speak confirmations (TTS)
+  voice:
+    enabled: true
+    on_block: true         # "Action blocked"
+    on_confirm: true       # "Confirmed"
+    on_complete: true      # "Complete"
+    voice: "Samantha"
+
+  # System notifications
+  system:
+    enabled: true
+    on_destructive: true   # Alert for destructive actions
+    on_error: true
+
+  # Optional: Slack/webhook for team visibility
+  # webhook:
+  #   url: "https://hooks.slack.com/..."
+  #   on_production_deploy: true
+
+# ----------------------------------------------------------------------------
+# META
+# ----------------------------------------------------------------------------
+# Rules about the rules.
+
+meta:
+  # Can agents modify this constitution?
+  self_modifiable: false
+
+  # Require confirmation to change trust level
+  trust_change_requires_voice: true
+
+  # Emergency override phrase (use wisely)
+  emergency_override:
+    phrase: "override all restrictions"
+    requires_confirmation: true
+    logs_to_audit: true
+    expires_minutes: 5

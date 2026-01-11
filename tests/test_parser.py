@@ -447,3 +447,147 @@ class TestEdgeCases:
         # Both should match (filler word stripping normalizes whitespace)
         if normal is not None:
             assert extra_spaces is not None
+
+
+class TestEscapeHatches:
+    """Test escape hatch priority bypass."""
+
+    def test_stop_is_escape_hatch(self):
+        """Test that 'stop' is recognized as escape hatch."""
+        result = match("stop")
+        assert result is not None
+        cmd, score = result
+        assert cmd.get("is_escape_hatch") == True
+        assert score == 100  # Exact match
+
+    def test_hold_is_escape_hatch(self):
+        """Test that 'hold' is recognized as escape hatch."""
+        result = match("hold")
+        assert result is not None
+        cmd, score = result
+        assert cmd.get("is_escape_hatch") == True
+        assert score == 100
+
+    def test_cancel_is_escape_hatch(self):
+        """Test that 'cancel' is recognized as escape hatch."""
+        result = match("cancel")
+        assert result is not None
+        cmd, score = result
+        assert cmd.get("is_escape_hatch") == True
+
+    def test_pause_is_escape_hatch(self):
+        """Test that 'pause' is recognized as escape hatch."""
+        result = match("pause")
+        assert result is not None
+        cmd, score = result
+        assert cmd.get("is_escape_hatch") == True
+
+    def test_escape_hatch_in_sentence(self):
+        """Test escape hatch detected even in a longer sentence."""
+        result = match("please stop now")
+        assert result is not None
+        cmd, score = result
+        assert cmd.get("is_escape_hatch") == True
+        assert cmd["phrase"] == "stop"
+
+    def test_escape_hatch_priority_over_fuzzy(self):
+        """Test that escape hatches bypass fuzzy matching."""
+        # 'stop' should match exactly, not fuzzy match to something else
+        result = match("stop")
+        assert result is not None
+        cmd, score = result
+        assert cmd["phrase"] == "stop"
+        assert score == 100  # Not a fuzzy score
+
+    def test_never_mind_escape_hatch(self):
+        """Test multi-word escape hatch 'never mind'."""
+        result = match("never mind")
+        assert result is not None
+        cmd, score = result
+        assert "escape" in cmd.get("tags", [])
+
+    def test_normal_commands_still_work(self):
+        """Test that non-escape commands still use fuzzy matching."""
+        result = match("the judge smiled")
+        assert result is not None
+        cmd, score = result
+        assert not cmd.get("is_escape_hatch")
+        assert "testing" in cmd.get("tags", [])
+
+
+class TestSemanticMatching:
+    """Test v0.6 semantic matching with embeddings."""
+
+    def test_semantic_match_import(self):
+        """Test that semantic_match can be imported."""
+        from src.parser import semantic_match, match_hybrid, SEMANTIC_ENABLED
+        assert callable(semantic_match)
+        assert callable(match_hybrid)
+
+    def test_semantic_match_returns_tuple_or_none(self):
+        """Test semantic_match returns correct type."""
+        from src.parser import semantic_match
+        result = semantic_match("run the tests")
+        if result is not None:
+            assert isinstance(result, tuple)
+            assert len(result) == 2
+            cmd, score = result
+            assert isinstance(cmd, dict)
+            assert isinstance(score, (int, float))
+
+    def test_hybrid_match_returns_method(self):
+        """Test match_hybrid returns match method."""
+        from src.parser import match_hybrid
+        result = match_hybrid("stop")
+        assert result is not None
+        cmd, score, method = result
+        assert method in ("fuzzy", "semantic", "escape")
+
+    def test_hybrid_escape_hatch_priority(self):
+        """Test escape hatches use 'escape' method."""
+        from src.parser import match_hybrid
+        result = match_hybrid("stop")
+        assert result is not None
+        cmd, score, method = result
+        assert method == "escape"
+        assert score == 100
+
+    def test_hybrid_fuzzy_for_exact(self):
+        """Test exact phrases use fuzzy method."""
+        from src.parser import match_hybrid
+        result = match_hybrid("the evening redness in the west")
+        if result is not None:
+            cmd, score, method = result
+            # Exact match should use fuzzy, not semantic
+            assert method in ("fuzzy", "escape")
+
+    def test_semantic_catches_different_words_same_intent(self):
+        """Test semantic matching catches intent with different words."""
+        from src.parser import semantic_match, SEMANTIC_ENABLED
+        if not SEMANTIC_ENABLED:
+            pytest.skip("Semantic matching disabled")
+
+        # "execute the test suite" should semantically match test commands
+        result = semantic_match("execute the test suite", threshold=0.4)
+        # May or may not match depending on grimoire, just verify no crash
+        assert result is None or isinstance(result, tuple)
+
+    def test_semantic_threshold_respected(self):
+        """Test semantic threshold filters low-confidence matches."""
+        from src.parser import semantic_match
+        # Very high threshold should reject most matches
+        result = semantic_match("random words here", threshold=0.99)
+        assert result is None
+
+    def test_hybrid_fallback_to_semantic(self):
+        """Test hybrid falls back to semantic when fuzzy fails."""
+        from src.parser import match_hybrid, SEMANTIC_ENABLED
+        if not SEMANTIC_ENABLED:
+            pytest.skip("Semantic matching disabled")
+
+        # Phrase that won't fuzzy match but might semantic match
+        result = match_hybrid("launch the automated tests", fuzzy_threshold=95)
+        # May find semantic match, verify structure if found
+        if result is not None:
+            cmd, score, method = result
+            assert method in ("fuzzy", "semantic", "escape")

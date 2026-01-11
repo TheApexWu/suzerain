@@ -54,6 +54,15 @@ DEFAULT_CONFIG = {
         "enabled": False,  # Use local Whisper instead of Deepgram
         "model": "small.en",  # tiny.en (fastest), base.en, small.en (best balance)
     },
+    "trust": {
+        # v0.6: Trust/autonomy level (1-5)
+        # 1 = preview (show only, never execute)
+        # 2 = explicit (confirm every action)
+        # 3 = supervised (confirm destructive only) [default]
+        # 4 = assisted (auto-execute, summarize after)
+        # 5 = autonomous (full auto, minimal output)
+        "level": 3,
+    },
 }
 
 # Template for --init-config (with placeholders and comments)
@@ -96,6 +105,15 @@ local_stt:
   enabled: false
   # Model size: tiny.en (fastest), base.en, small.en (best balance), medium.en (most accurate)
   model: small.en
+
+trust:
+  # v0.6: Trust/autonomy level (1-5)
+  # 1 = preview    - Show what would happen, never execute
+  # 2 = explicit   - Confirm every action before execution
+  # 3 = supervised - Confirm destructive actions only (default)
+  # 4 = assisted   - Auto-execute everything, summarize after
+  # 5 = autonomous - Full auto, minimal output (power users)
+  level: 3
 """
 
 
@@ -481,6 +499,20 @@ class Config:
     def local_stt_model(self) -> str:
         """Get local STT model size."""
         return self.get("local_stt", "model", "small.en")
+
+    @property
+    def trust_level(self) -> int:
+        """Get trust/autonomy level (1-5)."""
+        return self.get("trust", "level", 3)
+
+    def set_trust_level(self, level: int) -> None:
+        """Set trust/autonomy level and save to config."""
+        if level < 1 or level > 5:
+            raise ValueError(f"Trust level must be 1-5 (got: {level})")
+        if "trust" not in self._config:
+            self._config["trust"] = {}
+        self._config["trust"]["level"] = level
+        self.save()
 
     def set_project_path(self, path: str) -> None:
         """Set sticky project context path and save to config."""

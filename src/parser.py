@@ -55,6 +55,14 @@ _grimoire_cache = None
 _grimoire_cache_path = None  # Track which file was cached
 _grimoire_lock = threading.Lock()
 
+# v0.6: Semantic matching with embeddings
+_embedding_model = None
+_embedding_cache = None  # {phrase: embedding}
+_embedding_lock = threading.Lock()
+SEMANTIC_ENABLED = True  # Can disable with config
+SEMANTIC_MODEL = "all-MiniLM-L6-v2"  # Fast, good quality (80MB)
+SEMANTIC_THRESHOLD = 0.5  # Cosine similarity threshold (0-1)
+
 
 def load_grimoire() -> dict:
     """
@@ -90,6 +98,164 @@ def reload_grimoire() -> dict:
         _grimoire_cache = None
         _grimoire_cache_path = None
     return load_grimoire()
+
+
+# === v0.6: Semantic Matching ===
+
+def _get_embedding_model():
+    """Lazy load the sentence transformer model."""
+    global _embedding_model
+
+    if not SEMANTIC_ENABLED:
+        return None
+
+    with _embedding_lock:
+        if _embedding_model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+                _embedding_model = SentenceTransformer(SEMANTIC_MODEL)
+            except ImportError:
+                return None
+            except Exception:
+                return None
+    return _embedding_model
+
+
+def _get_phrase_embeddings() -> dict:
+    """
+    Get embeddings for all grimoire phrases AND aliases. Cached after first call.
+
+    Returns:
+        Dict mapping phrase -> embedding numpy array
+    """
+    global _embedding_cache
+
+    model = _get_embedding_model()
+    if model is None:
+        return {}
+
+    with _embedding_lock:
+        if _embedding_cache is None:
+            grimoire = load_grimoire()
+            commands = grimoire.get("commands", [])
+
+            # Collect all phrases INCLUDING aliases
+            phrases = []
+            for cmd in commands:
+                if "phrase" in cmd:
+                    phrases.append(cmd["phrase"])
+                for alias in cmd.get("aliases", []):
+                    phrases.append(alias)
+
+            if phrases:
+                embeddings = model.encode(phrases, convert_to_numpy=True)
+                _embedding_cache = {phrase: emb for phrase, emb in zip(phrases, embeddings)}
+            else:
+                _embedding_cache = {}
+
+    return _embedding_cache
+
+
+def semantic_match(text: str, threshold: float = None) -> Optional[Tuple[dict, float]]:
+    """
+    Match text against grimoire using semantic similarity.
+
+    Uses sentence embeddings to find semantically similar phrases,
+    even if the words are different.
+
+    Args:
+        text: Input text to match
+        threshold: Minimum cosine similarity (0-1). Uses SEMANTIC_THRESHOLD if None.
+
+    Returns:
+        Tuple of (matched_command, similarity_score) or None if no match
+    """
+    import numpy as np
+
+    if threshold is None:
+        threshold = SEMANTIC_THRESHOLD
+
+    model = _get_embedding_model()
+    if model is None:
+        return None
+
+    phrase_embeddings = _get_phrase_embeddings()
+    if not phrase_embeddings:
+        return None
+
+    # Embed input text
+    try:
+        input_embedding = model.encode(text, convert_to_numpy=True)
+    except Exception:
+        return None
+
+    # Find best match by cosine similarity
+    grimoire = load_grimoire()
+    # Build phrase map INCLUDING aliases
+    phrase_map = {}
+    for cmd in grimoire.get("commands", []):
+        phrase_map[cmd["phrase"]] = cmd
+        for alias in cmd.get("aliases", []):
+            phrase_map[alias] = cmd
+
+    best_phrase = None
+    best_score = -1
+
+    for phrase, phrase_emb in phrase_embeddings.items():
+        # Cosine similarity
+        similarity = np.dot(input_embedding, phrase_emb) / (
+            np.linalg.norm(input_embedding) * np.linalg.norm(phrase_emb)
+        )
+
+        if similarity > best_score:
+            best_score = similarity
+            best_phrase = phrase
+
+    if best_phrase and best_score >= threshold:
+        # Convert similarity (0-1) to score (0-100) for consistency
+        return phrase_map[best_phrase], float(best_score * 100)
+
+    return None
+
+
+def match_hybrid(text: str, fuzzy_threshold: int = None, semantic_threshold: float = None) -> Optional[Tuple[dict, int, str]]:
+    """
+    Hybrid matching: Try fuzzy first, fall back to semantic.
+
+    This gives the best of both worlds:
+    - Fuzzy catches exact/near-exact phrases quickly
+    - Semantic catches intent when words differ
+
+    Args:
+        text: Input text to match
+        fuzzy_threshold: Minimum fuzzy match score (0-100)
+        semantic_threshold: Minimum semantic similarity (0-1)
+
+    Returns:
+        Tuple of (matched_command, score, method) or None
+        method is "fuzzy", "semantic", or "escape"
+    """
+    # Phase 1: Try escape hatches first (instant)
+    result = match(text, threshold=95)  # High threshold for escape hatches
+    if result:
+        cmd, score = result
+        if cmd.get("is_escape_hatch"):
+            return cmd, score, "escape"
+
+    # Phase 2: Try fuzzy matching
+    result = match(text, threshold=fuzzy_threshold)
+    if result:
+        cmd, score = result
+        return cmd, score, "fuzzy"
+
+    # Phase 3: Fall back to semantic matching
+    if SEMANTIC_ENABLED:
+        result = semantic_match(text, threshold=semantic_threshold)
+        if result:
+            cmd, score = result
+            return cmd, int(score), "semantic"
+
+    return None
 
 
 def strip_filler_words(text: str) -> str:
@@ -131,6 +297,9 @@ def match(text: str, threshold: int = None) -> Optional[Tuple[dict, int]]:
     """
     Match spoken text against grimoire commands.
 
+    Escape hatches (stop, cancel, hold, etc.) are checked FIRST with
+    exact matching for immediate response - no fuzzy matching delay.
+
     Args:
         text: Transcribed speech
         threshold: Minimum match score (0-100). Uses config default if None.
@@ -145,17 +314,33 @@ def match(text: str, threshold: int = None) -> Optional[Tuple[dict, int]]:
     if threshold is None:
         threshold = parser_config.get("threshold", 70)
 
-    scorer_name = parser_config.get("scorer", "token_set_ratio")
-    scorer = getattr(fuzz, scorer_name, fuzz.token_set_ratio)
-
     # Clean input: strip filler words AND modifier phrases
     cleaned = strip_filler_words(text)
     cleaned = strip_modifiers(cleaned)
+    text_lower = cleaned.lower().strip()
 
-    # Build phrase -> command mapping
-    phrase_map = {cmd["phrase"]: cmd for cmd in commands}
+    # === PHASE 1: Escape hatch priority (exact match, no fuzzy) ===
+    # These bypass fuzzy matching for immediate response (<5ms)
+    escape_commands = [cmd for cmd in commands if cmd.get("is_escape_hatch")]
+    for cmd in escape_commands:
+        phrase_lower = cmd["phrase"].lower()
+        # Exact match or phrase contained in input
+        if phrase_lower == text_lower or phrase_lower in text_lower.split():
+            return cmd, 100  # Perfect score for escape hatch
 
-    # Fuzzy match against all phrases
+    # === PHASE 2: Normal fuzzy matching (includes aliases) ===
+    scorer_name = parser_config.get("scorer", "token_set_ratio")
+    scorer = getattr(fuzz, scorer_name, fuzz.token_set_ratio)
+
+    # Build phrase -> command mapping INCLUDING aliases
+    phrase_map = {}
+    for cmd in commands:
+        phrase_map[cmd["phrase"]] = cmd
+        # Add aliases (literary phrases that map to same command)
+        for alias in cmd.get("aliases", []):
+            phrase_map[alias] = cmd
+
+    # Fuzzy match against all phrases and aliases
     result = process.extractOne(
         cleaned,
         phrase_map.keys(),
@@ -195,8 +380,12 @@ def match_top_n(text: str, n: int = 3, threshold: int = None) -> List[Tuple[dict
     cleaned = strip_filler_words(text)
     cleaned = strip_modifiers(cleaned)
 
-    # Build phrase -> command mapping
-    phrase_map = {cmd["phrase"]: cmd for cmd in commands}
+    # Build phrase -> command mapping INCLUDING aliases
+    phrase_map = {}
+    for cmd in commands:
+        phrase_map[cmd["phrase"]] = cmd
+        for alias in cmd.get("aliases", []):
+            phrase_map[alias] = cmd
 
     # Get top N matches
     results = process.extract(

@@ -6,7 +6,8 @@
 # "Whatever exists without my knowledge exists without my consent."
 
 commands:
-  # === ESCAPE HATCH (highest priority, shortest phrase) ===
+  # === ESCAPE HATCH (Priority 0 - bypass fuzzy matching) ===
+  # These commands are checked FIRST with exact matching for immediate response.
 
   - phrase: "hold"
     expansion: |
@@ -15,6 +16,48 @@ commands:
       Acknowledge with "Holding." and wait for further instructions.
     confirmation: false
     tags: [escape, cancel, stop]
+    is_escape_hatch: true
+
+  - phrase: "stop"
+    expansion: |
+      STOP. Cancel the current operation immediately.
+      Do not execute any pending actions.
+      Acknowledge with "Stopped." and wait for further instructions.
+    confirmation: false
+    tags: [escape, cancel, stop]
+    is_escape_hatch: true
+
+  - phrase: "cancel"
+    expansion: |
+      STOP. Cancel the current operation immediately.
+      Do not execute any pending actions.
+      Acknowledge with "Cancelled." and wait for further instructions.
+    confirmation: false
+    tags: [escape, cancel, stop]
+    is_escape_hatch: true
+
+  - phrase: "pause"
+    expansion: |
+      Pause the current operation. Do not terminate, just suspend.
+      Acknowledge with "Paused." and wait for "resume" or "continue".
+    confirmation: false
+    tags: [escape, pause]
+    is_escape_hatch: true
+
+  - phrase: "wait"
+    expansion: |
+      Pause the current operation. Do not terminate, just suspend.
+      Acknowledge with "Waiting." and wait for further instructions.
+    confirmation: false
+    tags: [escape, pause]
+    is_escape_hatch: true
+
+  - phrase: "never mind"
+    expansion: |
+      Cancel and forget the last command. Don't execute anything.
+      Acknowledge with "Cancelled." and wait for a new command.
+    confirmation: false
+    tags: [escape, cancel]
     is_escape_hatch: true
 
   # === DEPLOYMENT & PRODUCTION ===
