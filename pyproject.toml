@@ -1,38 +1,28 @@
 [project]
 name = "suzerain"
-version = "0.1.2"
-description = "Voice-activated Claude Code interface with semantic command ciphers"
+version = "0.2.0"
+description = "Understand your AI governance style - analyze how you use AI coding assistants"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
+license = {text = "MIT"}
 authors = [
     {name = "Amadeus Woo"}
 ]
-keywords = ["voice", "claude", "ai", "automation", "cli"]
+keywords = ["ai", "governance", "claude", "analytics", "behavior", "cli"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "Topic :: Software Development :: User Interfaces",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = [
-    "pyaudio>=0.2.14",
-    "rapidfuzz>=3.0.0",
-    "pyyaml>=6.0",
-    "numpy>=1.24.0",
-    "simpleaudio>=1.0.4",
-]
+# No external dependencies - stdlib only
+dependencies = []
 
 [project.optional-dependencies]
-# Wake word detection (for hands-free mode)
-wakeword = [
-    "pvporcupine>=3.0.0",
-]
-# Deepgram SDK (alternative to raw HTTP)
-deepgram = [
-    "deepgram-sdk>=3.0.0",
-]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
@@ -41,19 +31,20 @@ dev = [
 ]
 
 [project.scripts]
-suzerain = "main:main"
+suzerain = "suzerain.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/amadeuswoo/suzerain"
+Documentation = "https://github.com/amadeuswoo/suzerain#readme"
+Repository = "https://github.com/amadeuswoo/suzerain"
+Issues = "https://github.com/amadeuswoo/suzerain/issues"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-py-modules = ["main", "parser", "errors", "history", "cache", "config", "context", "logger", "utils", "audio_feedback", "wake_word", "streaming_stt"]
-packages = ["grimoire"]
-package-dir = {"" = "src"}
-
-[tool.setuptools.package-data]
-grimoire = ["*.yaml"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -62,8 +53,8 @@ addopts = "-v"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py310", "py311", "py312"]

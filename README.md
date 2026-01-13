@@ -2,116 +2,101 @@
 
 > *"Whatever exists without my knowledge exists without my consent."*
 
-**Interactive behavioral analysis mapping your AI tool usage to 10,000 years of political history.**
+**Understand your AI governance style.**
 
----
+Suzerain analyzes how you use AI coding assistants and maps your behavior to historical governance patterns. Are you a hands-off Delegator or a careful Strategist?
 
-## The Question
+## Quick Start
 
-You use AI coding tools every day. But *how* do you govern them?
+```bash
+pip install suzerain
+suzerain analyze
+```
 
-- Do you approve every action, or trust the machine?
-- Do you intervene constantly, or let it run?
-- Do you follow rigid rules, or adapt on the fly?
+## What You Get
 
-Suzerain reveals your governance pattern and maps it to historical archetypes:
+```
+============================================================
+YOUR AI GOVERNANCE PROFILE
+============================================================
+
+Sessions analyzed: 61
+Data period: 24 days
+Total tool calls: 5,761
+
+--- GOVERNANCE METRICS ---
+  Overall acceptance:   77.1%
+  Bash acceptance:      50.9% ← KEY
+  High-risk acceptance: 64.3%
+  Low-risk acceptance:  100.0%
+
+--- CLASSIFICATION ---
+  Pattern:    Power User (Cautious)
+  Archetype:  Strategist
+
+--- WHAT THIS MEANS ---
+  You're a sophisticated user who maintains control.
+  You use advanced features but scrutinize risky operations.
+```
+
+## The Archetypes
 
 | Archetype | Pattern | Historical Parallel |
 |-----------|---------|---------------------|
-| **Autocrat** | Approve everything manually | Roman Emperor — effective but fragile |
-| **Council** | Context-dependent trust | Venetian Republic — lasted 1000 years |
-| **Deliberator** | Slow, thoughtful, high correction | Athenian Assembly — thorough but slow |
-| **Delegator** | Fast, autonomous, full trust | Mongol yasa — speed over safety |
-| **Constitutionalist** | Rules-based, predictable | Constitutional systems — stable but rigid |
-| **Strategist** | Control the what, delegate the how | Napoleon — leverage through focus |
-
-Learn from civilizations that tried your approach. See what worked. See what collapsed.
-
----
+| **Delegator** | Accept everything, fast | Mongol Horde — trust the generals |
+| **Autocrat** | Accept everything, slow | Roman Emperor — review but approve |
+| **Strategist** | Selective trust, sophisticated | Napoleon — control what matters |
+| **Deliberator** | Cautious, slow decisions | Athenian Assembly — thorough but slow |
+| **Council** | High variance, uses agents | Venetian Republic — distributed trust |
+| **Constitutionalist** | Consistent, rule-based | Constitutional systems — predictable |
 
 ## How It Works
 
+Suzerain parses your Claude Code logs (`~/.claude/projects/`) and extracts:
+- Tool acceptance/rejection rates
+- Decision timing
+- Tool diversity and sophistication signals
+
+**Key finding:** Bash acceptance is THE discriminating feature. All other tools have ~100% acceptance.
+
+## Commands
+
+```bash
+suzerain analyze           # Analyze your usage
+suzerain analyze --export  # Export to JSON
+suzerain share --preview   # See what would be shared
+suzerain share --confirm   # Share anonymized metrics (opt-in)
 ```
-┌─────────────────────────────────────────────────────────┐
-│                                                         │
-│   Your Governance Style: AUTOCRAT                       │
-│   Context: Production / Security                        │
-│                                                         │
-│   You approved 94% of actions manually.                 │
-│   Decision time: 2.4s average (deliberate)              │
-│   Trust delegation: Low across all contexts             │
-│                                                         │
-│   Strengths for your context:                           │
-│   ✅ Quality control — every output reviewed            │
-│   ✅ Appropriate for security-critical work             │
-│                                                         │
-│   Weaknesses for your context:                          │
-│   ⚠️ Bottleneck — nothing scales beyond your attention  │
-│   ⚠️ Burnout risk — cognitive load unsustainable        │
-│                                                         │
-│   Historical parallel: Roman Emperor (centralized era)  │
-│   What happened: Empire too dependent on one person     │
-│                                                         │
-│   Try instead: STRATEGIST                               │
-│   → Control architecture decisions, delegate impl       │
-│   → Keep security review, automate test generation      │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## Features
-
-- **Behavior Analysis** — Track how you use Claude Code / Cursor
-- **Historical Mapping** — Your patterns → governance archetypes
-- **Strengths & Weaknesses** — What works, what doesn't
-- **Recommendations** — Alternative styles to try
-- **Interactive** — Explore, compare, share your results
-
----
-
-## Why This Exists
-
-Most AI tools ask: "How should AI behave?"
-
-Suzerain asks: "How do YOU behave with AI?"
-
-The insight isn't in the tool. It's in understanding yourself.
-
----
-
-## Status
-
-🚧 **In Development**
-
-- [ ] Behavior classification engine (K-Means clustering)
-- [ ] Interactive radar charts (React + D3)
-- [ ] Historical context cards
-- [ ] Style Trials — experiment with different governance patterns
-- [ ] Shareable results
-
----
 
 ## Privacy
 
-**Local-first, opt-in only.**
+- **Local-first:** All analysis runs on your machine
+- **Opt-in:** Nothing shared without explicit consent
+- **Minimal:** Only aggregate metrics, never content
+- **Transparent:** Preview exactly what would be shared
 
+## The Research
+
+With n=1 real data + simulated personas, we found:
+- **Bash acceptance** is the only feature with variance (others ~100%)
+- Users cluster into 2 axes: **Sophistication** × **Caution**
+- 6 narrative archetypes map onto 4 empirical quadrants
+
+See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for honest methodology disclosure.
+
+## Contributing
+
+We need more data to validate the archetypes. If you run `suzerain analyze` and find it interesting, consider:
+
+```bash
+suzerain share --preview  # See what would be shared
+suzerain share --confirm  # Help improve the research
 ```
-NEVER collected: prompts, source code, file contents, API keys
-SAFE to collect: aggregate approval rate, archetype classification
-DEFAULT: Off
-```
+
+## License
+
+MIT
 
 ---
 
-## The Name
-
-**Suzerain** (n.): A feudal overlord. One who holds sovereignty.
-
-You are the suzerain of your AI tools. But what kind of ruler are you?
-
----
-
-*"The truth about the world is that anything is possible."*
-*"Now understand how you're choosing to govern that possibility."*
+*"What kind of AI ruler are you?"*

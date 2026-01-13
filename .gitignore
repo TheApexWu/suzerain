@@ -36,10 +36,8 @@ ENV/
 .coverage
 htmlcov/
 
-# Audio test files
-*.wav
-*.mp3
-*.m4a
+# Legacy code (archived)
+_legacy/
 
 # Secrets - NEVER COMMIT
 .env
