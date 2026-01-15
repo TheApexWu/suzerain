@@ -4,6 +4,26 @@
 
 ---
 
+## ⚠️ Epistemic Status: Hypothesis-Generating
+
+**This tool is NOT a validated psychometric instrument.**
+
+| What It Is | What It Isn't |
+|------------|---------------|
+| Exploratory analysis | Rigorous personality assessment |
+| Behavioral patterns from logs | Stable psychological traits |
+| Heuristic thresholds | Empirically validated cutoffs |
+| Hypothesis-generating | Hypothesis-testing |
+| N=1 real user + simulations | Diverse validated sample |
+
+**The archetypes describe recent behavior, not who you are.** Patterns shift. The same person may be a Delegator on Monday and a Strategist on Friday. Context matters more than category.
+
+**Thresholds are hand-tuned.** Values like "bash_rate < 0.6 = cautious" are interpretive choices, not discoveries. They discriminate on simulated data but haven't been validated on diverse real users.
+
+**We need your data to improve.** Run `suzerain share --preview` to see what would be shared. Participation helps build a real dataset.
+
+---
+
 ## What We Did
 
 ### Phase 1: Single-User Analysis (n=1)

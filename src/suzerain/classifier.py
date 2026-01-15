@@ -4,6 +4,12 @@ Archetype classification based on empirical features.
 Two-tier approach:
 1. Primary Pattern (empirical) - what the data shows
 2. Narrative Archetype - for storytelling and engagement
+
+EPISTEMIC STATUS: Hypothesis-generating, not validated.
+- Thresholds are heuristic (hand-tuned on simulated data)
+- Validated on 11 synthetic personas, 1 real user
+- Treat classifications as exploratory, not definitive
+- See docs/METHODOLOGY.md for full disclosure
 """
 
 import statistics
@@ -116,28 +122,39 @@ def classify_user(profile: UserGovernanceProfile, parser: Optional[ClaudeLogPars
     surgical = subtle.get('surgical_ratio', 0)
     edit_intensity = subtle.get('edit_intensity', 0)
 
-    # Compute sophistication score (0-1)
+    # =========================================================================
+    # SOPHISTICATION SCORE (0-1)
+    # =========================================================================
+    # HEURISTIC THRESHOLDS: These values are hand-tuned based on simulated
+    # personas, not validated on diverse real users. Treat as exploratory.
+    # See docs/METHODOLOGY.md for epistemic status.
+    # =========================================================================
     sophistication = 0.0
-    if agent_rate > 0.05:
+    if agent_rate > 0.05:      # Heuristic: >5% agent usage = power signal
         sophistication += 0.3
-    if diversity > 6:
+    if diversity > 6:          # Heuristic: >6 unique tools = high diversity
         sophistication += 0.25
-    elif diversity > 4:
+    elif diversity > 4:        # Heuristic: 4-6 tools = moderate diversity
         sophistication += 0.1
-    if power_ratio > 0.2:
+    if power_ratio > 0.2:      # Heuristic: >20% deep sessions = power user
         sophistication += 0.25
-    if surgical > 0.3:
+    if surgical > 0.3:         # Heuristic: search/read ratio > 0.3 = surgical
         sophistication += 0.2
 
-    # Compute caution score (0-1)
+    # =========================================================================
+    # CAUTION SCORE (0-1)
+    # =========================================================================
+    # HEURISTIC THRESHOLDS: Same caveat. Bash acceptance is THE key signal,
+    # but cutoffs (0.6, 0.8) are interpretive, not empirically derived.
+    # =========================================================================
     caution = 0.0
-    if bash_rate < 0.6:
+    if bash_rate < 0.6:        # Heuristic: <60% bash accept = high caution
         caution += 0.5
-    elif bash_rate < 0.8:
+    elif bash_rate < 0.8:      # Heuristic: 60-80% = moderate caution
         caution += 0.25
-    if risk_delta > 0.3:
+    if risk_delta > 0.3:       # Heuristic: >30% trust gap = risk-aware
         caution += 0.3
-    if snap_rate < 0.4:
+    if snap_rate < 0.4:        # Heuristic: <40% snap decisions = deliberate
         caution += 0.2
 
     # Primary pattern (empirical)

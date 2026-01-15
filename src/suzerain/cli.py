@@ -1,11 +1,12 @@
 """
-Suzerain CLI - Analyze your AI governance style.
+Suzerain CLI - Understand your AI governance style.
 
 Usage:
-    suzerain analyze           Analyze your Claude Code usage
-    suzerain analyze --export  Export data to JSON
-    suzerain share --preview   Preview what would be shared
-    suzerain share --confirm   Share anonymized metrics
+    suzerain analyze            Analyze your Claude Code usage
+    suzerain analyze --verbose  Show detailed metrics
+    suzerain analyze --export   Export data to JSON
+    suzerain share --preview    Preview what would be shared
+    suzerain share --confirm    Share anonymized metrics
 """
 
 import argparse
@@ -18,98 +19,282 @@ from datetime import datetime, timezone
 from . import __version__
 from .parser import ClaudeLogParser
 from .classifier import classify_user
+from .insights import (
+    get_archetype_insight,
+    get_pattern_insight,
+    generate_insight_summary,
+)
 
 
 OUTPUT_DIR = Path.home() / ".suzerain" / "analysis"
 
 
-def print_profile(profile, classification):
-    """Print governance profile to console."""
-    print("\n" + "=" * 60)
-    print("YOUR AI GOVERNANCE PROFILE")
-    print("=" * 60)
+def print_header():
+    """Print the Suzerain header."""
+    print()
+    print("  ╔═══════════════════════════════════════════════════════╗")
+    print("  ║                      SUZERAIN                         ║")
+    print("  ║                                                       ║")
+    print("  ║   \"The suzerain rules even where there are other      ║")
+    print("  ║    kings. There is no territory outside his claim.\"   ║")
+    print("  ╚═══════════════════════════════════════════════════════╝")
 
-    print(f"\nSessions analyzed: {profile.sessions_analyzed}")
-    print(f"Data period: {profile.data_collection_days} days")
-    print(f"Total tool calls: {profile.total_tool_calls}")
 
-    print("\n--- GOVERNANCE METRICS ---")
+def print_profile_compact(profile, classification):
+    """Print compact governance profile focused on insight."""
+    insight = get_archetype_insight(classification)
+    pattern_insight = get_pattern_insight(classification)
+
+    print_header()
+
+    # The headline - framed as pattern, not identity
+    print(f"\n  Your recent pattern: {insight.name.upper()}")
+    print(f"  Empirical cluster: {classification.primary_pattern}")
+    print()
+
+    # The governance style
+    print("  ┌─ YOUR GOVERNANCE STYLE ───────────────────────────────┐")
+    print(f"  │ {insight.language_game}")
+    print("  │")
+    # Word wrap the description
+    desc = insight.game_description
+    words = desc.split()
+    line = "  │ "
+    for word in words:
+        if len(line) + len(word) > 58:
+            print(line)
+            line = "  │ " + word + " "
+        else:
+            line += word + " "
+    if line.strip() != "│":
+        print(line)
+    print("  └────────────────────────────────────────────────────────┘")
+
+    # The bottleneck (the actionable insight)
+    print()
+    print("  ┌─ YOUR BOTTLENECK ────────────────────────────────────┐")
+    print(f"  │ {insight.bottleneck}")
+    print("  │")
+    desc = insight.bottleneck_description
+    words = desc.split()
+    line = "  │ "
+    for word in words:
+        if len(line) + len(word) > 58:
+            print(line)
+            line = "  │ " + word + " "
+        else:
+            line += word + " "
+    if line.strip() != "│":
+        print(line)
+    print("  └────────────────────────────────────────────────────────┘")
+
+    # Key metrics (the empirical grounding)
+    print()
+    print("  ┌─ KEY METRICS (Karpathy-approved) ────────────────────┐")
+    kf = classification.key_features
+    sf = classification.subtle_features
+    print(f"  │ Bash acceptance:      {kf['bash_acceptance_rate']:.0%} ← THE discriminator")
+    print(f"  │ Snap judgments:       {kf['snap_judgment_rate']:.0%} (decisions < 500ms)")
+    print(f"  │ Risk delta:           {kf['risk_trust_delta']:+.0%} (safe vs risky trust gap)")
+    print(f"  │ Sophistication:       {sf.get('sophistication_score', 0):.2f}")
+    print(f"  │ Caution:              {sf.get('caution_score', 0):.2f}")
+    print("  └────────────────────────────────────────────────────────┘")
+
+    # One thing to try
+    print()
+    print("  ┌─ ONE THING TO TRY ───────────────────────────────────┐")
+    one_thing = pattern_insight["one_thing_to_try"]
+    words = one_thing.split()
+    line = "  │ "
+    for word in words:
+        if len(line) + len(word) > 58:
+            print(line)
+            line = "  │ " + word + " "
+        else:
+            line += word + " "
+    if line.strip() != "│":
+        print(line)
+    print("  └────────────────────────────────────────────────────────┘")
+
+    # Data summary with uncertainty
+    print()
+    print(f"  Based on {profile.sessions_analyzed} sessions, "
+          f"{profile.total_tool_calls:,} tool calls, "
+          f"{profile.data_collection_days} days")
+
+    # Confidence note based on data volume
+    if profile.sessions_analyzed < 10:
+        print("  ⚠ Low confidence: patterns may shift with more data")
+    elif profile.sessions_analyzed < 30:
+        print("  ◐ Moderate confidence: consider this a hypothesis")
+    else:
+        print("  ● Higher confidence: pattern appears stable")
+
+    # Fluidity disclaimer with thematic tie-in
+    print()
+    print("  ─────────────────────────────────────────────────────────")
+    print("  You are the suzerain. The AI executes, but you rule.")
+    print("  These patterns describe how you exercise your claim—")
+    print("  not who you are. The game changes when you do.")
+    print()
+
+
+def print_profile_verbose(profile, classification):
+    """Print detailed governance profile with all metrics."""
+    insight = get_archetype_insight(classification)
+
+    print_header()
+
+    print(f"\n  Your recent pattern: {insight.name.upper()}")
+    print(f"  \"{insight.historical_parallel}\"")
+    print()
+
+    # Data summary
+    print("  ═══════════════════════════════════════════════════════")
+    print("  DATA SUMMARY")
+    print("  ═══════════════════════════════════════════════════════")
+    print(f"  Sessions analyzed:    {profile.sessions_analyzed}")
+    print(f"  Total tool calls:     {profile.total_tool_calls:,}")
+    print(f"  Data period:          {profile.data_collection_days} days")
+    print()
+
+    # Governance metrics
+    print("  ═══════════════════════════════════════════════════════")
+    print("  GOVERNANCE METRICS")
+    print("  ═══════════════════════════════════════════════════════")
     print(f"  Overall acceptance:   {profile.acceptance_rate:.1%}")
     print(f"  Bash acceptance:      {classification.key_features['bash_acceptance_rate']:.1%} ← KEY")
     print(f"  High-risk acceptance: {profile.high_risk_acceptance:.1%}")
     print(f"  Low-risk acceptance:  {profile.low_risk_acceptance:.1%}")
+    print(f"  Risk trust delta:     {classification.key_features['risk_trust_delta']:+.1%}")
+    print()
 
-    print("\n--- DECISION TEMPO ---")
+    # Decision tempo
+    print("  ═══════════════════════════════════════════════════════")
+    print("  DECISION TEMPO")
+    print("  ═══════════════════════════════════════════════════════")
     print(f"  Mean decision time:   {profile.mean_decision_time_ms:.0f}ms")
     print(f"  Snap judgment rate:   {classification.key_features['snap_judgment_rate']:.1%} (<500ms)")
+    print(f"  Session consistency:  {profile.session_consistency:.2f}")
+    print()
 
-    if classification.subtle_features:
-        sf = classification.subtle_features
-        print("\n--- SOPHISTICATION SIGNALS ---")
-        print(f"  Agent usage:          {sf.get('agent_spawn_rate', 0):.1%}")
-        print(f"  Tool diversity:       {sf.get('tool_diversity', 0):.1f} unique/session")
-        print(f"  Session depth:        {sf.get('session_depth', 0):.0f} tools/session")
-        print(f"  Surgical ratio:       {sf.get('surgical_ratio', 0):.2f}")
+    # Sophistication signals
+    sf = classification.subtle_features
+    print("  ═══════════════════════════════════════════════════════")
+    print("  SOPHISTICATION SIGNALS")
+    print("  ═══════════════════════════════════════════════════════")
+    print(f"  Agent spawn rate:     {sf.get('agent_spawn_rate', 0):.1%}")
+    print(f"  Tool diversity:       {sf.get('tool_diversity', 0):.1f} unique/session")
+    print(f"  Session depth:        {sf.get('session_depth', 0):.0f} tools/session")
+    print(f"  Surgical ratio:       {sf.get('surgical_ratio', 0):.2f} (search/read)")
+    print(f"  Edit intensity:       {sf.get('edit_intensity', 0):.1%}")
+    print()
 
-    print("\n--- CLASSIFICATION ---")
-    print(f"  Pattern:    {classification.primary_pattern} ({classification.pattern_confidence:.0%})")
-    print(f"  Archetype:  {classification.archetype} ({classification.archetype_confidence:.0%})")
+    # Classification
+    print("  ═══════════════════════════════════════════════════════")
+    print("  CLASSIFICATION")
+    print("  ═══════════════════════════════════════════════════════")
+    print(f"  Primary pattern:      {classification.primary_pattern}")
+    print(f"  Pattern confidence:   {classification.pattern_confidence:.0%}")
+    print(f"  Archetype:            {classification.archetype}")
+    print(f"  Archetype confidence: {classification.archetype_confidence:.0%}")
+    print()
+    print(f"  Sophistication score: {sf.get('sophistication_score', 0):.2f}")
+    print(f"  Caution score:        {sf.get('caution_score', 0):.2f}")
+    print()
 
-    if classification.subtle_features:
-        sf = classification.subtle_features
-        print(f"\n  Sophistication: {sf.get('sophistication_score', 0):.2f}")
-        print(f"  Caution:        {sf.get('caution_score', 0):.2f}")
-
-    print("\n--- ARCHETYPE SCORES ---")
+    # Archetype scores
+    print("  ARCHETYPE SCORES:")
     for arch, score in sorted(classification.archetype_scores.items(), key=lambda x: -x[1]):
         bar = "█" * int(score * 20)
-        print(f"  {arch:<18} {bar} {score:.0%}")
+        print(f"    {arch:<18} {bar} {score:.0%}")
+    print()
 
-    # Interpretation
-    print("\n--- WHAT THIS MEANS ---")
-    pattern = classification.primary_pattern
+    # Governance style
+    print("  ═══════════════════════════════════════════════════════")
+    print("  YOUR GOVERNANCE STYLE")
+    print("  ═══════════════════════════════════════════════════════")
+    print(f"  {insight.language_game}")
+    print()
+    print(f"  {insight.game_description}")
+    print()
 
-    if "Power User" in pattern and "Cautious" in pattern:
-        print("  You're a sophisticated user who maintains control.")
-        print("  You use advanced features but scrutinize risky operations.")
-    elif "Power User" in pattern:
-        print("  You're a sophisticated user who trusts the AI.")
-        print("  You leverage agents and advanced features freely.")
-    elif "Cautious" in pattern:
-        print("  You're careful with AI suggestions.")
-        print("  You review before accepting, especially shell commands.")
+    # Bottleneck
+    print("  ═══════════════════════════════════════════════════════")
+    print("  YOUR BOTTLENECK")
+    print("  ═══════════════════════════════════════════════════════")
+    print(f"  {insight.bottleneck}")
+    print()
+    print(f"  {insight.bottleneck_description}")
+    print()
+    print("  Mechanism:")
+    print(f"  {insight.mechanism}")
+    print()
+
+    # Recommendations
+    print("  ═══════════════════════════════════════════════════════")
+    print("  RECOMMENDATIONS")
+    print("  ═══════════════════════════════════════════════════════")
+    for i, rec in enumerate(insight.recommendations, 1):
+        print(f"  {i}. {rec}")
+    print()
+
+    # Risk
+    print("  ═══════════════════════════════════════════════════════")
+    print("  RISK TO WATCH")
+    print("  ═══════════════════════════════════════════════════════")
+    print(f"  {insight.risk}")
+    print()
+
+    # Epistemic status
+    print("  ═══════════════════════════════════════════════════════")
+    print("  EPISTEMIC STATUS")
+    print("  ═══════════════════════════════════════════════════════")
+    print(f"  Data: {profile.sessions_analyzed} sessions, {profile.total_tool_calls:,} calls")
+    if profile.sessions_analyzed < 10:
+        print("  Confidence: LOW — treat as exploratory hypothesis")
+    elif profile.sessions_analyzed < 30:
+        print("  Confidence: MODERATE — pattern emerging, not yet stable")
     else:
-        print("  You trust the AI and accept most suggestions quickly.")
-        print("  This is common for quick tasks and exploration.")
-
-    print("\n" + "=" * 60)
+        print("  Confidence: HIGHER — pattern appears consistent")
+    print()
+    print("  This tool is hypothesis-generating, not a validated")
+    print("  psychometric instrument. Thresholds are heuristic.")
+    print()
+    print("  You are the suzerain. These patterns describe how you")
+    print("  exercise your claim—not who you are.")
+    print()
 
 
 def export_data(profile, classification, parser):
     """Export analysis to JSON."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    insight_summary = generate_insight_summary(classification)
+
     export = {
         "version": __version__,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "profile": asdict(profile),
         "classification": asdict(classification),
+        "insights": insight_summary,
     }
 
     output_file = OUTPUT_DIR / "governance_profile.json"
     with open(output_file, 'w') as f:
         json.dump(export, f, indent=2, default=str)
 
-    print(f"\nExported to: {output_file}")
+    print(f"  Exported to: {output_file}")
 
 
 def preview_share(profile, classification):
     """Show what would be shared."""
-    print("\n" + "=" * 60)
-    print("DATA SHARING PREVIEW")
-    print("=" * 60)
+    print()
+    print("  ═══════════════════════════════════════════════════════")
+    print("  DATA SHARING PREVIEW")
+    print("  ═══════════════════════════════════════════════════════")
 
-    print("\nThe following WOULD be shared:\n")
+    print("\n  The following WOULD be shared:\n")
 
     share_data = {
         "summary": {
@@ -138,36 +323,38 @@ def preview_share(profile, classification):
 
     print(json.dumps(share_data, indent=2))
 
-    print("\n" + "-" * 60)
-    print("NOT shared:")
-    print("  ✗ Prompts or conversations")
-    print("  ✗ File paths or code")
-    print("  ✗ Command contents")
-    print("  ✗ Project names")
-    print("  ✗ Timestamps (only durations)")
-    print("=" * 60)
+    print("\n  NOT shared:")
+    print("    ✗ Prompts or conversations")
+    print("    ✗ File paths or code")
+    print("    ✗ Command contents")
+    print("    ✗ Project names")
+    print("    ✗ Timestamps (only durations)")
+    print()
 
     return share_data
 
 
 def cmd_analyze(args):
     """Run analysis command."""
-    print("Analyzing Claude Code logs...")
+    print("\n  Analyzing Claude Code logs...")
 
     parser = ClaudeLogParser(project_filter=args.project)
     sessions = parser.parse_all_sessions()
 
     if not sessions:
-        print("\nNo sessions with tool calls found.")
-        print("Make sure you have Claude Code logs at ~/.claude/projects/")
+        print("\n  No sessions with tool calls found.")
+        print("  Make sure you have Claude Code logs at ~/.claude/projects/")
         return 1
 
-    print(f"Found {len(sessions)} sessions with tool activity")
+    print(f"  Found {len(sessions)} sessions with tool activity")
 
     profile = parser.compute_governance_profile()
     classification = classify_user(profile, parser)
 
-    print_profile(profile, classification)
+    if args.verbose:
+        print_profile_verbose(profile, classification)
+    else:
+        print_profile_compact(profile, classification)
 
     if args.export:
         export_data(profile, classification, parser)
@@ -181,7 +368,7 @@ def cmd_share(args):
     sessions = parser.parse_all_sessions()
 
     if not sessions:
-        print("No data to share.")
+        print("  No data to share.")
         return 1
 
     profile = parser.compute_governance_profile()
@@ -189,18 +376,18 @@ def cmd_share(args):
 
     if args.preview:
         preview_share(profile, classification)
-        print("\nTo share, run: suzerain share --confirm")
+        print("  To share, run: suzerain share --confirm")
         return 0
 
     if args.confirm:
-        share_data = preview_share(profile, classification)
-        print("\n⚠️  Data sharing not yet implemented.")
-        print("This will send anonymized metrics to help improve Suzerain.")
-        print("Check https://github.com/amadeuswoo/suzerain for updates.")
+        preview_share(profile, classification)
+        print("  ⚠️  Data sharing not yet implemented.")
+        print("  This will send anonymized metrics to help improve Suzerain.")
+        print("  Check https://github.com/amadeuswoo/suzerain for updates.")
         return 0
 
-    print("Use --preview to see what would be shared")
-    print("Use --confirm to share anonymized metrics")
+    print("  Use --preview to see what would be shared")
+    print("  Use --confirm to share anonymized metrics")
     return 1
 
 
@@ -217,6 +404,7 @@ def main():
     # analyze command
     analyze_parser = subparsers.add_parser('analyze', help='Analyze your Claude Code usage')
     analyze_parser.add_argument('--project', type=str, help='Filter by project name')
+    analyze_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed metrics')
     analyze_parser.add_argument('--export', action='store_true', help='Export to JSON')
 
     # share command

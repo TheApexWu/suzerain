@@ -1,8 +1,10 @@
 # Suzerain
 
-> *"Whatever exists without my knowledge exists without my consent."*
+> *"The suzerain rules even where there are other kings. There is no territory outside his claim."*
 
-**Understand your AI governance style through behavioral analysis.**
+**You are the suzerain. The AI executes, but you rule.**
+
+Suzerain analyzes how you govern AI coding assistants—your patterns of trust, rejection, and deliberation—and classifies your style into historical archetypes.
 
 ## Project Summary
 

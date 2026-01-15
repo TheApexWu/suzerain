@@ -1,530 +1,354 @@
-# Governance Archetypes: Definitions, Evaluations, and Recommendations
+# The Six Archetypes of AI Governance
 
-> 6 archetypes. Each has strengths, weaknesses, and context-specific advice.
-
----
-
-## The 6 Archetypes
-
-| Archetype | Core Pattern | One-Liner |
-|-----------|--------------|-----------|
-| **Autocrat** | High manual approval, deliberate decisions | "Nothing moves without my review" |
-| **Council** | Context-dependent trust, domain separation | "Different rules for different domains" |
-| **Deliberator** | High decision time, high correction rate | "Let me think about this" |
-| **Delegator** | High auto-execute, minimal intervention | "I trust the machine" |
-| **Constitutionalist** | Stable rules, predictable patterns | "The rules are the rules" |
-| **Strategist** | High-level control, operational delegation | "I decide what, AI decides how" |
+> *"The suzerain rules even where there are other kings. There is no territory outside his claim."*
 
 ---
 
-## Archetype 1: AUTOCRAT
+## What is a Suzerain?
 
-*Historical anchor: Roman Emperor (centralized era), Louis XIV*
+In feudal systems, a **suzerain** wasn't a direct ruler—they were the power *above* the local kings. They didn't govern the territory themselves; they governed *through* others, exercising authority by claim rather than direct control.
 
-### Behavioral Signature
-```
-acceptance_rate:        > 85% (approves most, but manually)
-decision_time_ms:       > 2000ms (deliberate review)
-auto_execute_ratio:     < 10% (rarely auto-executes)
-intervention_rate:      High (frequently stops/modifies)
-trust_by_context:       Uniform (same process for all tasks)
-```
+When you use AI coding tools, you are the suzerain:
+- The AI proposes; you dispose
+- The AI generates; you accept or reject
+- The AI executes; you bear the consequences
 
-### Strengths
-- **Quality control**: Every output reviewed before execution
-- **Consistency**: You know exactly what goes into production
-- **Learning**: You see every AI decision, building intuition
-- **Accountability**: Clear chain of responsibility (you)
-
-### Weaknesses
-- **Bottleneck**: Nothing scales beyond your attention capacity
-- **Burnout risk**: Cognitive load of reviewing everything
-- **Speed**: Slower than peers who delegate
-- **Single point of failure**: You get sick, everything stops
-
-### When Autocrat Works Well
-| Context | Fit | Why |
-|---------|-----|-----|
-| Security-critical code | ✅ Excellent | Every line needs human review |
-| Early-stage startup (solo) | ✅ Good | You need to understand everything |
-| Regulated industries | ✅ Good | Audit trails, compliance |
-| High-velocity team | ❌ Poor | You'll bottleneck the team |
-| Routine maintenance | ❌ Poor | Overkill for low-stakes work |
-
-### Recommendations by Work Context
-
-**If you work in Production/DevOps:**
-> Your pattern provides safety but slows deployment velocity. Consider: Auto-approve for staging, manual for production. You don't need to review every test run.
-
-**If you work in Security:**
-> Your pattern is appropriate. Security review should be deliberate. However, consider automating scanning/linting while keeping human review for logic changes.
-
-**If you work in Management/Architecture:**
-> You may be too deep in the weeds. Strategist pattern might serve you better—control the what, delegate the how.
-
-**If you work in Feature Development:**
-> You're likely slower than peers. Consider: Trust AI for boilerplate, review only for business logic.
-
-### Alternative Styles to Try
-1. **Strategist**: Keep control of architecture decisions, delegate implementation
-2. **Council**: Create explicit trust rules by domain instead of reviewing everything
-3. **Constitutionalist**: Define rules once, then trust the rules
-
-### The Hard Question
-> "Am I reviewing everything because I need to, or because I'm afraid to let go?"
+Every approval is an exercise of your claim. Every rejection is a boundary of your territory. **Suzerain analyzes how you rule.**
 
 ---
 
-## Archetype 2: COUNCIL
+## The Core Insight
 
-*Historical anchor: Venetian Republic, Roman Senate (Republic era)*
+Every time you accept or reject an AI suggestion, you're exercising sovereignty. These micro-decisions reveal your **governance style**—implicit rules you've developed through practice.
 
-### Behavioral Signature
-```
-acceptance_rate:        50-75% (selective)
-trust_by_context:       High variance (different rules per domain)
-trust_delta_by_risk:    > 0.3 (trusts low-risk more)
-decision_time_variance: High (fast for some, slow for others)
-session_consistency:    Medium (adapts to context)
-```
-
-### Strengths
-- **Sophisticated**: Recognizes that not all decisions are equal
-- **Scalable**: Automates low-risk, focuses attention on high-risk
-- **Sustainable**: Less cognitive load than Autocrat
-- **Defensible**: "I have explicit rules" is auditable
-
-### Weaknesses
-- **Complexity**: Must maintain mental model of trust boundaries
-- **Edge cases**: What happens when context is ambiguous?
-- **Setup cost**: Defining the rules takes upfront work
-- **Drift risk**: Rules may become outdated as AI improves
-
-### When Council Works Well
-| Context | Fit | Why |
-|---------|-----|-----|
-| Mixed-risk environments | ✅ Excellent | Different rules for prod vs dev |
-| Team leads | ✅ Good | Model for how team should operate |
-| Mature codebases | ✅ Good | Known risk boundaries |
-| Greenfield/exploration | ⚠️ Mixed | Boundaries not yet clear |
-| Solo hacking | ❌ Overkill | Just ship it |
-
-### Recommendations by Work Context
-
-**If you work in Production/DevOps:**
-> Your pattern is well-suited. Ensure your trust boundaries are explicit: auto-approve monitoring changes, require review for infrastructure. Document your rules.
-
-**If you work in Security:**
-> Good fit, but verify your "low-risk" classification is accurate. Security context can make "routine" changes dangerous. Audit your trust boundaries quarterly.
-
-**If you work in Management/Architecture:**
-> Excellent pattern. You're modeling good governance for your team. Make your rules explicit and shareable.
-
-**If you work in Feature Development:**
-> Consider whether your context-switching overhead is worth it. If you're constantly re-evaluating "is this high-risk?", you might be faster with simpler rules.
-
-### Alternative Styles to Try
-1. **Constitutionalist**: Simplify to fixed rules (less context-switching)
-2. **Strategist**: Focus only on architectural decisions, delegate all implementation
-3. **Delegator**: For a week, trust everything—see what breaks
-
-### The Hard Question
-> "Are my trust boundaries based on real risk, or historical anxiety?"
+Suzerain doesn't tell you what you did wrong. It tells you **how you rule** and **where your bottleneck is**.
 
 ---
 
-## Archetype 3: DELIBERATOR
+## ⚠️ Patterns, Not Personality
 
-*Historical anchor: Athenian Assembly, Academic peer review*
+**These archetypes describe recent behavior, not who you are.**
 
-### Behavioral Signature
-```
-acceptance_rate:        40-60% (selective)
-decision_time_ms:       > 3000ms (slow, thoughtful)
-edit_after_accept_rate: > 40% (heavy modification)
-undo_rate:              > 10% (frequently reverses)
-mean_edit_distance:     High (substantial changes)
-```
+Wittgenstein himself would caution against treating categories as essences. The same user may:
+- Be a **Delegator** during rapid prototyping
+- Shift to **Strategist** when touching production code
+- Become a **Deliberator** when learning a new codebase
 
-### Strengths
-- **Quality**: Thoroughly considered outputs
-- **Learning**: Deep engagement with AI suggestions
-- **Refinement**: AI as starting point, you as editor
-- **Understanding**: You really know your code
+**The game can be played differently tomorrow.** These patterns have "family resemblance"—overlapping characteristics, not sharp boundaries. You may see yourself in multiple archetypes. That's correct behavior, not classification failure.
 
-### Weaknesses
-- **Speed**: Significantly slower than peers
-- **Overhead**: Editing everything is exhausting
-- **Diminishing returns**: Not all code needs deep review
-- **Decision fatigue**: Constant evaluation is draining
-
-### When Deliberator Works Well
-| Context | Fit | Why |
-|---------|-----|-----|
-| Research/exploration | ✅ Excellent | Understanding matters more than speed |
-| Learning new domain | ✅ Good | Deliberation builds knowledge |
-| Critical algorithms | ✅ Good | Correctness over velocity |
-| CRUD features | ❌ Poor | Overkill for routine work |
-| Tight deadlines | ❌ Poor | You'll miss them |
-
-### Recommendations by Work Context
-
-**If you work in Production/DevOps:**
-> Your pattern may be too slow for incident response. Consider: Deliberate during planning, but have a "fast mode" for emergencies.
-
-**If you work in Security:**
-> Deliberation is appropriate for security review. But distinguish between "reviewing for security" and "over-editing for style." Focus your deliberation.
-
-**If you work in Management/Architecture:**
-> Your deep engagement is valuable for architectural decisions. But you might be deliberating on implementation details that don't need your attention.
-
-**If you work in Feature Development:**
-> You're probably the slowest on your team. This is fine if quality matters more than speed. If not, practice accepting more and editing less.
-
-### Alternative Styles to Try
-1. **Council**: Deliberate only on high-risk, accept quickly on low-risk
-2. **Strategist**: Deliberate on design, delegate implementation
-3. **Delegator**: One week of accepting everything—observe what happens
-
-### The Hard Question
-> "Am I deliberating because it improves the output, or because deciding feels risky?"
+**Epistemic status:** Hypothesis-generating, not validated. See [METHODOLOGY.md](METHODOLOGY.md) for honest disclosure.
 
 ---
 
-## Archetype 4: DELEGATOR
+## The Six Archetypes
 
-*Historical anchor: Mongol yasa system, Laissez-faire management*
-
-### Behavioral Signature
-```
-acceptance_rate:        > 90% (accepts almost everything)
-decision_time_ms:       < 500ms (instant decisions)
-auto_execute_ratio:     > 50% (high automation)
-intervention_rate:      < 5% (rarely intervenes)
-undo_rate:              Low (lives with decisions)
-```
-
-### Strengths
-- **Speed**: Fastest possible workflow
-- **Scale**: Can handle high volume
-- **Trust**: Demonstrates confidence in AI
-- **Low overhead**: Minimal cognitive load
-
-### Weaknesses
-- **Risk**: Errors propagate unreviewed
-- **Learning**: You don't see what AI is doing
-- **Accountability**: "The AI did it" isn't a defense
-- **Drift**: You may not notice AI quality degrading
-
-### When Delegator Works Well
-| Context | Fit | Why |
-|---------|-----|-----|
-| Prototyping/hacking | ✅ Excellent | Speed matters, errors cheap |
-| Test generation | ✅ Good | Low-risk, high-volume |
-| Documentation | ✅ Good | Errors are fixable |
-| Production deploys | ❌ Dangerous | Errors are expensive |
-| Security | ❌ Dangerous | Trust must be verified |
-
-### Recommendations by Work Context
-
-**If you work in Production/DevOps:**
-> ⚠️ Your pattern is high-risk. A single bad auto-approved deploy can cause outages. Add friction for production changes. Keep delegation for staging/dev.
-
-**If you work in Security:**
-> ⚠️ This pattern is inappropriate for security work. AI can introduce vulnerabilities you won't catch. Switch to Council or Autocrat for security-relevant code.
-
-**If you work in Management/Architecture:**
-> You may be delegating decisions that need your judgment. Architectural mistakes compound. Consider Strategist pattern.
-
-**If you work in Feature Development:**
-> Your speed is an asset, but verify AI output occasionally. Schedule weekly review of AI-generated code you've shipped.
-
-### Alternative Styles to Try
-1. **Council**: Add minimal review for high-risk actions only
-2. **Constitutionalist**: Create rules that force review in specific cases
-3. **Autocrat**: One week of reviewing everything—calibrate what you've been missing
-
-### The Hard Question
-> "Do I trust the AI because it's earned trust, or because reviewing is tedious?"
+| Archetype | Language Game | Bottleneck | Historical Parallel |
+|-----------|---------------|------------|---------------------|
+| **Delegator** | The Acceptance Game | Error discovery downstream | Mongol Horde |
+| **Autocrat** | The Review Game | Review time without filtering | Roman Emperor |
+| **Strategist** | The Discrimination Game | Decision overhead on edge cases | Napoleon |
+| **Deliberator** | The Consideration Game | Decision latency on all operations | Athenian Assembly |
+| **Council** | The Orchestration Game | Coordination overhead | Venetian Republic |
+| **Constitutionalist** | The Consistency Game | Rule rigidity | Constitutional systems |
 
 ---
 
-## Archetype 5: CONSTITUTIONALIST
+## 1. THE DELEGATOR
 
-*Historical anchor: Constitutional democracies, Rule-based systems*
+**Language Game:** The Acceptance Game
 
-### Behavioral Signature
+You treat AI output as draft code to be merged, not proposals to be reviewed. Your language game is one of throughput—tokens in, code out, velocity above all.
+
+**Signature:**
 ```
-acceptance_rate:        60-80% (moderate)
-session_consistency:    > 0.8 (highly consistent)
-streak_behavior:        Low (each decision independent)
-trust_by_context:       Low variance (uniform rules)
-decision_time_ms:       Consistent (same process always)
+bash_acceptance:     > 90%
+snap_judgment_rate:  > 50% (decisions < 500ms)
+sophistication:      Low (few agents, low diversity)
 ```
 
-### Strengths
-- **Predictability**: Team knows what to expect
-- **Fairness**: Same rules apply to all code
-- **Simplicity**: No context-switching overhead
-- **Auditability**: Rules are explicit and documented
+**Bottleneck:** Error discovery happens downstream
 
-### Weaknesses
-- **Rigidity**: Rules may not fit all situations
-- **Outdated rules**: Static rules in dynamic environment
-- **False security**: Following rules ≠ good outcomes
-- **Edge cases**: Rules can't cover everything
+You accept most suggestions quickly, which maximizes throughput but means errors surface later—in tests, in production, in code review. The bottleneck isn't decision speed, it's rework.
 
-### When Constitutionalist Works Well
-| Context | Fit | Why |
-|---------|-----|-----|
-| Regulated industries | ✅ Excellent | Compliance requires consistency |
-| Team standardization | ✅ Good | Shared rules reduce friction |
-| CI/CD pipelines | ✅ Good | Automation needs fixed rules |
-| Exploratory work | ❌ Poor | Rules constrain discovery |
-| Rapidly changing domains | ❌ Poor | Rules become stale |
+**Mechanism:** High bash_acceptance + fast decisions = rubber-stamping. This works when AI suggestions are high-quality and low-risk. It fails when a single bad command has cascading consequences.
 
-### Recommendations by Work Context
+**Recommendations:**
+1. Add verification for destructive commands (rm, DROP, force push)
+2. Use --dry-run flags when available
+3. Set up pre-commit hooks as your safety net
+4. Trust but verify: spot-check 1 in 10 suggestions
 
-**If you work in Production/DevOps:**
-> Your pattern fits well. Ensure rules are documented and version-controlled. Review rules quarterly—are they still appropriate?
+**Risk:** A single unreviewed command can undo hours of work
 
-**If you work in Security:**
-> Good baseline, but security threats evolve. Your rules must evolve too. Schedule rule reviews when new vulnerability classes emerge.
-
-**If you work in Management/Architecture:**
-> Your consistency is valuable for team governance. But don't let rules prevent judgment calls. "The rule says X" isn't always right.
-
-**If you work in Feature Development:**
-> Your predictability is an asset. But consider: Are you following rules that no longer serve you? Audit your rules for cruft.
-
-### Alternative Styles to Try
-1. **Council**: Add context-sensitivity to your rules
-2. **Strategist**: Keep rules for implementation, add judgment for design
-3. **Deliberator**: Temporarily suspend rules and deliberate—see what you learn
-
-### The Hard Question
-> "Do my rules serve me, or do I serve my rules?"
+**The Hard Question:** *"Do I trust the AI because it's earned trust, or because reviewing is tedious?"*
 
 ---
 
-## Archetype 6: STRATEGIST (New)
+## 2. THE AUTOCRAT
 
-*Historical anchor: Napoleon, Eisenhower, Lee Kuan Yew (operational aspect)*
+**Language Game:** The Review Game
 
-### Behavioral Signature
+You read everything but approve everything. Your language game is one of witnessed consent—you must see the command, understand it, then accept it. The ritual matters even when the outcome is predetermined.
+
+**Signature:**
 ```
-trust_by_context:       Bimodal (low for strategic, high for tactical)
-acceptance_rate:        High for implementation, low for design
-decision_time_ms:       Long for architecture, short for code
-intervention_type:      "What" not "how"
-edit_after_accept_rate: Low (accepts execution, controls direction)
-```
-
-### Defining Pattern
-The Strategist separates concerns:
-- **Strategic decisions** (architecture, design, priorities): Personal control
-- **Tactical decisions** (implementation, syntax, boilerplate): Full delegation
-
-```python
-# Strategist detection
-if (trust_by_context["architecture"] < 0.4 and
-    trust_by_context["implementation"] > 0.8 and
-    trust_by_context["test"] > 0.8):
-    # High-level control + operational delegation
-    archetype = "Strategist"
+bash_acceptance:     > 85%
+snap_judgment_rate:  < 40% (slow decisions)
+decision_time:       > 2000ms
 ```
 
-### Strengths
-- **Leverage**: Your judgment where it matters most
-- **Scale**: Delegate volume, control direction
-- **Efficiency**: Right level of attention for each task
-- **Leadership**: Natural fit for tech leads, architects
+**Bottleneck:** Review time without filtering
 
-### Weaknesses
-- **Requires clarity**: Must know what's strategic vs tactical
-- **Trust calibration**: Wrong delegation can be costly
-- **Communication overhead**: Must clearly convey intent to AI
-- **Blindness risk**: Tactical errors can compound unnoticed
+You spend time reviewing suggestions you'll accept anyway. The bottleneck is attention spent on low-risk operations. Your review is thorough but not selective.
 
-### When Strategist Works Well
-| Context | Fit | Why |
-|---------|-----|-----|
-| Tech lead/architect role | ✅ Excellent | Your job is direction, not details |
-| Complex systems | ✅ Good | Strategic errors are expensive |
-| Mentorship | ✅ Good | Model for junior devs |
-| Solo prototyping | ⚠️ Mixed | Might be overkill |
-| Pure implementation | ❌ Poor | No strategic decisions to make |
+**Mechanism:** High acceptance + slow decisions = reviewing but not filtering. You're paying the cost of review without the benefit of rejection. This is cognitive overhead without risk reduction.
 
-### Recommendations by Work Context
+**Recommendations:**
+1. Identify which tool types actually need review (hint: usually just Bash)
+2. Auto-approve Read/Glob/Grep—they're side-effect free
+3. Focus review energy on commands with side effects
+4. Set up allow-lists for common safe patterns
 
-**If you work in Production/DevOps:**
-> Your pattern fits infrastructure decisions. Control what gets deployed (strategy), delegate how it's implemented (tactics). Ensure your strategic reviews include rollback plans.
+**Risk:** Review fatigue leads to rubber-stamping when it matters most
 
-**If you work in Security:**
-> Good fit: Control threat model and security architecture, delegate implementation of mitigations. But verify tactical implementation—AI may misunderstand security requirements.
-
-**If you work in Management/Architecture:**
-> This is your natural home. Ensure your "strategic" category includes: API design, data models, service boundaries. Delegate: CRUD, tests, formatting.
-
-**If you work in Feature Development:**
-> Consider whether you have enough strategic decisions to warrant this pattern. If you're mostly implementing, Delegator or Council might be more efficient.
-
-### Alternative Styles to Try
-1. **Autocrat**: Temporarily review everything—are you missing tactical issues?
-2. **Council**: Add domain-specific rules instead of just strategic/tactical split
-3. **Delegator**: Delegate strategy for a week—see if AI can handle it
-
-### The Hard Question
-> "Am I accurately distinguishing strategic from tactical, or am I just delegating what I find boring?"
+**The Hard Question:** *"Am I reviewing everything because I need to, or because I'm afraid to let go?"*
 
 ---
 
-## Context-Specific Recommendations Matrix
+## 3. THE STRATEGIST
+
+**Language Game:** The Discrimination Game
+
+You play different games with different tools. Safe operations flow through unchallenged; risky operations face scrutiny. Your language game is contextual—the same AI, different trust levels based on consequences.
+
+**Signature:**
+```
+risk_delta:          > 30% (safe vs risky trust gap)
+bash_acceptance:     40-80% (selective)
+sophistication:      Medium-High
+```
+
+**Bottleneck:** Decision overhead on edge cases
+
+Your selective trust is efficient for clear-cut cases. The bottleneck is ambiguous commands—things that might be risky. You may over-deliberate on medium-risk operations.
+
+**Mechanism:** High risk_delta = different trust by tool type. You've learned that Read can't hurt you but Bash can. This is rational. The cost is decision latency on commands that fall between clear categories.
+
+**Recommendations:**
+1. Codify your rules: which patterns always need review?
+2. Build muscle memory for common safe Bash patterns (ls, git status, etc.)
+3. Pre-approve specific commands you run frequently
+4. Your instincts are good—trust them faster on familiar patterns
+
+**Risk:** Over-indexing on tool type, under-indexing on command content
+
+**The Hard Question:** *"Am I accurately distinguishing strategic from tactical, or am I just delegating what I find boring?"*
+
+---
+
+## 4. THE DELIBERATOR
+
+**Language Game:** The Consideration Game
+
+Every suggestion is a proposal requiring thought. Your language game is deliberative democracy—nothing passes without due consideration. Speed is sacrificed for confidence.
+
+**Signature:**
+```
+decision_time:       > 5000ms
+caution_score:       High
+any acceptance rate  (deliberation is about time, not outcome)
+```
+
+**Bottleneck:** Decision latency on all operations
+
+You take time on everything, even safe operations. The bottleneck is pure throughput—your careful approach limits how much you can accomplish in a session. Quality is high but quantity suffers.
+
+**Mechanism:** Slow decisions regardless of tool type = deliberative processing. This might indicate uncertainty, learning, or genuine caution. It might also indicate distraction or multitasking.
+
+**Recommendations:**
+1. Identify your 'always safe' operations and fast-track them
+2. Use AI for exploration in dedicated sessions, then batch approvals
+3. If slow due to context-switching, dedicate focused time to AI work
+4. Your thoroughness is valuable—apply it selectively to high-stakes decisions
+
+**Risk:** Deliberation becomes procrastination; velocity drops below usefulness
+
+**The Hard Question:** *"Am I deliberating because it improves the output, or because deciding feels risky?"*
+
+---
+
+## 5. THE COUNCIL
+
+**Language Game:** The Orchestration Game
+
+You don't just use AI—you deploy it. Agents, parallel tasks, complex workflows. Your language game is one of coordination—you're the conductor, AI is the orchestra.
+
+**Signature:**
+```
+agent_spawn_rate:    > 10%
+tool_diversity:      > 6 unique tools/session
+sophistication:      High
+```
+
+**Bottleneck:** Coordination overhead
+
+Managing multiple agents and complex workflows has overhead. The bottleneck is not individual decisions but overall orchestration—keeping track of what's running, what's done, what needs attention.
+
+**Mechanism:** High agent usage + high tool diversity = power user leveraging Claude Code's full capabilities. This is sophisticated usage but requires mental overhead to manage.
+
+**Recommendations:**
+1. Use TodoWrite to track parallel workstreams
+2. Batch similar operations rather than interleaving
+3. Set up project-specific contexts to reduce re-explanation
+4. Your orchestration skills are advanced—document your workflows for others
+
+**Risk:** Complexity becomes its own bottleneck; losing track of agent states
+
+**The Hard Question:** *"Am I using agents because they help, or because orchestration feels productive?"*
+
+---
+
+## 6. THE CONSTITUTIONALIST
+
+**Language Game:** The Consistency Game
+
+Your behavior is predictable, session to session. You've developed stable patterns—implicit rules governing your AI interactions. Your language game has a constitution, even if unwritten.
+
+**Signature:**
+```
+session_consistency: > 0.8
+bash_acceptance:     60-90% (moderate, stable)
+low variance across sessions
+```
+
+**Bottleneck:** Rule rigidity
+
+Consistent patterns are efficient but can become rigid. The bottleneck is adaptation—when situations call for different approaches, your habits may override situational judgment.
+
+**Mechanism:** High session consistency + moderate acceptance = stable behavioral patterns. You've found what works and you stick to it. This is efficient until the situation changes.
+
+**Recommendations:**
+1. Periodically audit your implicit rules—are they still serving you?
+2. Try different approaches in low-stakes contexts to expand your range
+3. Your consistency is a strength—codify it explicitly in CLAUDE.md
+4. Teach your patterns to others; consistency is transferable
+
+**Risk:** Habits optimized for past contexts may not fit new ones
+
+**The Hard Question:** *"Do my rules serve me, or do I serve my rules?"*
+
+---
+
+## The Two Axes
+
+Archetypes emerge from two underlying dimensions discovered empirically:
+
+### Sophistication (0-1)
+
+How much of Claude Code's capability do you leverage?
+
+| Score | Pattern | Signals |
+|-------|---------|---------|
+| 0.0-0.3 | Basic usage | Read, Edit, Bash only |
+| 0.3-0.6 | Competent | Uses search tools, some agents |
+| 0.6-1.0 | Power user | Heavy agents, deep sessions, diverse tools |
+
+### Caution (0-1)
+
+How selective are you about what you accept?
+
+| Score | Pattern | Signals |
+|-------|---------|---------|
+| 0.0-0.3 | Trusting | Accepts most suggestions quickly |
+| 0.3-0.6 | Balanced | Some review, mostly accepting |
+| 0.6-1.0 | Cautious | Reviews carefully, rejects frequently |
+
+### The Four Quadrants → Six Archetypes
+
+```
+                         HIGH CAUTION
+                              │
+       Casual (Cautious)      │      Power User (Cautious)
+       → Strategist           │      → Strategist/Council
+       → Deliberator          │
+                              │
+LOW ──────────────────────────┼─────────────────────────── HIGH
+SOPHISTICATION                │                    SOPHISTICATION
+                              │
+       Casual (Trusting)      │      Power User (Trusting)
+       → Delegator            │      → Council
+       → Constitutionalist    │      → Autocrat
+                              │
+                         LOW CAUTION
+```
+
+---
+
+## Empirical Grounding (Karpathy-Approved)
+
+These archetypes aren't invented—they're discovered from data.
+
+### What We Measured
+
+From 70+ sessions and 6,000+ tool calls:
+
+| Feature | What It Measures | Variance |
+|---------|------------------|----------|
+| `bash_acceptance_rate` | Trust in shell commands | **THE KEY** (50-100%) |
+| `agent_spawn_rate` | Power user signal | 0-40% |
+| `tool_diversity` | Sophistication | 1-12 unique |
+| `session_depth` | Engagement | 1-1000+ calls |
+| `snap_judgment_rate` | Decision speed | 40-90% |
+
+### What We Found
+
+1. **Bash acceptance is THE discriminator.** All other tools have ~100% acceptance.
+2. **Sophistication and caution are independent.** You can be cautious AND sophisticated.
+3. **Features discriminate between user types.** Simulated personas cluster correctly.
+
+---
+
+## Context-Specific Recommendations
 
 ### By Work Domain
 
-| Domain | Recommended Archetype | Avoid | Why |
-|--------|----------------------|-------|-----|
-| **Production/Infrastructure** | Council, Constitutionalist | Delegator | Errors are expensive |
+| Domain | Recommended | Avoid | Why |
+|--------|-------------|-------|-----|
+| **Production** | Council, Constitutionalist | Delegator | Errors expensive |
 | **Security** | Autocrat, Council | Delegator | Trust must be verified |
-| **Architecture/Design** | Strategist, Deliberator | Delegator | Strategic errors compound |
-| **Feature Development** | Council, Strategist | Autocrat (unless junior) | Balance speed and quality |
-| **Testing** | Delegator, Constitutionalist | Autocrat | Volume matters, risk is low |
-| **Documentation** | Delegator | Deliberator | Speed matters, errors cheap |
-| **Prototyping** | Delegator | Autocrat, Deliberator | Speed is everything |
-| **Code Review (of others)** | Deliberator | Delegator | Your job is to review |
-| **Incident Response** | Delegator (for fixes), Autocrat (for RCA) | Deliberator | Speed first, then analyze |
-| **Compliance/Audit** | Constitutionalist, Autocrat | Delegator | Rules must be followed |
+| **Architecture** | Strategist, Deliberator | Delegator | Strategic errors compound |
+| **Feature Dev** | Council, Strategist | Autocrat | Balance speed and quality |
+| **Testing** | Delegator, Constitutionalist | Autocrat | Volume matters, risk low |
+| **Prototyping** | Delegator | Deliberator | Speed is everything |
 
 ### By Career Stage
 
 | Stage | Recommended | Why |
 |-------|-------------|-----|
-| **Junior (0-2 years)** | Deliberator, Autocrat | You need to learn what AI is doing |
-| **Mid (2-5 years)** | Council, Strategist | Balance efficiency with judgment |
-| **Senior (5+ years)** | Strategist, Council | Focus on leverage, not volume |
-| **Lead/Architect** | Strategist | Your job is direction, not details |
-| **Manager** | Strategist, Delegator | You shouldn't be in the code that much |
-
-### By Team Size
-
-| Size | Recommended | Why |
-|------|-------------|-----|
-| **Solo** | Delegator, Strategist | Only you to slow you down |
-| **Small (2-5)** | Council, Strategist | Some coordination needed |
-| **Medium (5-20)** | Constitutionalist, Council | Need shared rules |
-| **Large (20+)** | Constitutionalist | Consistency at scale |
+| **Junior** | Deliberator, Autocrat | Need to learn what AI does |
+| **Mid** | Council, Strategist | Balance efficiency with judgment |
+| **Senior** | Strategist, Council | Focus on leverage |
+| **Lead** | Strategist | Direction, not details |
 
 ---
 
-## Evaluation Framework
+## Ruling Differently Tomorrow
 
-When showing users their archetype, provide:
+These archetypes describe **recent behavior**, not personality. The same suzerain may:
+- Be a **Delegator** during rapid prototyping
+- Shift to **Strategist** when touching production code
+- Become a **Deliberator** when learning a new domain
 
-### 1. The Classification
-```
-Your Governance Style: STRATEGIST (78% confidence)
-
-You control high-level decisions and delegate implementation.
-You reviewed 94% of architectural decisions personally.
-You auto-approved 87% of implementation code.
-```
-
-### 2. Strengths/Weaknesses for Their Context
-```
-Your context: Production/Security
-
-Strengths for your context:
-✅ Strategic control appropriate for security architecture
-✅ Delegation of implementation maintains velocity
-
-Weaknesses for your context:
-⚠️ Implementation errors in security code can be severe
-⚠️ You may miss tactical security issues (e.g., injection flaws)
-
-Recommendations:
-→ Keep strategic control for threat modeling
-→ Add light review for security-critical implementation
-→ Consider "Council" pattern for security-tagged files
-```
-
-### 3. Alternative Styles to Experiment
-```
-Based on your work in Production/Security, consider:
-
-1. COUNCIL pattern for security code
-   → Create explicit trust rules: auto-approve tests, review auth code
-   → Try for 1 week, measure impact on velocity
-
-2. AUTOCRAT mode for security PRs
-   → Temporarily review all security-tagged changes
-   → Use for critical releases, then relax
-```
-
-### 4. The Hard Question
-```
-Reflect:
-"Am I delegating implementation because I trust the AI's security awareness,
-or because reviewing security details is tedious?"
-```
+Your governance style changes with context, stakes, and experience. If this tool makes you feel *categorized*, we've failed. If it makes you *notice* how you rule, we've succeeded.
 
 ---
 
-## How to Measure Context
-
-To provide context-specific recommendations, we need to know what the user is working on.
-
-### Automatic Detection (from instrumentation)
-```python
-# Infer context from file patterns
-def detect_context(file_path: str, command: str) -> TaskContext:
-    if "test" in file_path or "spec" in file_path:
-        return TaskContext.TEST
-    if "deploy" in command or "prod" in file_path:
-        return TaskContext.DEPLOY
-    if ".tf" in file_path or "infrastructure" in file_path:
-        return TaskContext.INFRASTRUCTURE
-    if "security" in file_path or "auth" in file_path:
-        return TaskContext.SECURITY
-    # etc.
-```
-
-### User-Provided Context
-```yaml
-# ~/.suzerain/profile.yaml
-work_context:
-  primary_domain: production    # production, security, feature, research
-  team_size: medium             # solo, small, medium, large
-  career_stage: senior          # junior, mid, senior, lead, manager
-  risk_tolerance: low           # low, medium, high
-  compliance_required: true     # true, false
-```
-
-### Contextual Feature Engineering
-```python
-# Weight features by context
-if user.work_context == "security":
-    # For security context, Delegator pattern is higher risk
-    risk_score = compute_delegator_risk(features) * 1.5
-elif user.work_context == "prototyping":
-    # For prototyping, Delegator is fine
-    risk_score = compute_delegator_risk(features) * 0.3
-```
+*"What kind of ruler are you today?"*
 
 ---
 
-## Summary
+## Appendix: Theoretical Background
 
-| Archetype | Best For | Avoid If | Key Metric |
-|-----------|----------|----------|------------|
-| Autocrat | Security, compliance, learning | High-velocity teams | acceptance_rate > 85%, decision_time > 2s |
-| Council | Mixed-risk, team leads | Exploration phase | High trust_by_context variance |
-| Deliberator | Research, critical code | Deadlines | High edit_rate, high decision_time |
-| Delegator | Prototyping, tests, docs | Production, security | acceptance_rate > 90%, decision_time < 500ms |
-| Constitutionalist | Regulated, team standards | Rapidly changing domains | High session_consistency |
-| Strategist | Leads, architects, complex systems | Pure implementation | Bimodal trust by strategic/tactical |
+For those interested in the philosophical grounding, Suzerain draws on Wittgenstein's concept of "language games"—the idea that meaning emerges from patterns of use, not definitions. Each archetype represents a different "game" you play with AI: acceptance, review, discrimination, deliberation, orchestration, or consistency.
 
----
-
-*"Know thyself" — Delphi*
-*"Know thy context" — Suzerain*
+The key insight: your rules are implicit, revealed only through behavior. Suzerain doesn't give you rules to follow—it shows you the rules you already follow.
