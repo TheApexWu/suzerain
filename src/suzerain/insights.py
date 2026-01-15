@@ -364,3 +364,96 @@ def get_pattern_insight(classification: Classification) -> Dict:
         )
 
     return insights
+
+
+def get_prompting_approaches(classification: Classification) -> Dict:
+    """
+    Get concrete prompting approaches based on the user's pattern.
+    Not generic advice - actual prompts and workflows to try.
+    """
+    pattern = classification.primary_pattern
+    features = classification.key_features
+    subtle = classification.subtle_features
+
+    bash_rate = features.get("bash_acceptance_rate", 1.0)
+    snap_rate = features.get("snap_judgment_rate", 0.5)
+    agent_rate = subtle.get("agent_spawn_rate", 0)
+
+    approaches = {
+        "thinking_framework": "",
+        "prompt_to_try": "",
+        "claude_md_suggestion": "",
+        "workflow_shift": "",
+    }
+
+    if bash_rate > 0.85:
+        # High trust - need verification without slowing down
+        approaches["thinking_framework"] = (
+            "Shift from 'accept/reject' to 'accept/accept with check'. "
+            "You're fast, stay fast, but add a verification layer."
+        )
+        approaches["prompt_to_try"] = (
+            "Before running commands that modify or delete, "
+            "list what will change and ask me to confirm."
+        )
+        approaches["claude_md_suggestion"] = (
+            "Add to CLAUDE.md: 'For rm, git push --force, or DROP commands, "
+            "always show a dry-run or preview first.'"
+        )
+        approaches["workflow_shift"] = (
+            "Use Claude's planning mode for multi-step operations. "
+            "Let it draft the full plan, review once, then execute."
+        )
+
+    elif bash_rate < 0.5:
+        # Low trust - need efficiency without losing control
+        approaches["thinking_framework"] = (
+            "You're reviewing everything. That's fine for unfamiliar territory, "
+            "but expensive for routine operations. Separate the two."
+        )
+        approaches["prompt_to_try"] = (
+            "I trust you for: ls, cat, git status, git diff, grep, find. "
+            "Run those without asking. For everything else, explain first."
+        )
+        approaches["claude_md_suggestion"] = (
+            "Add to CLAUDE.md: 'Safe commands (read-only, no side effects) "
+            "can run without confirmation. Destructive commands need approval.'"
+        )
+        approaches["workflow_shift"] = (
+            "Try agents (Task tool) for exploration. They can do the risky "
+            "poking around while you review only the final output."
+        )
+
+    else:
+        # Middle ground - optimize the decision boundary
+        approaches["thinking_framework"] = (
+            "You're already discriminating by risk. The question is whether "
+            "your categories match actual risk, or just perceived risk."
+        )
+        approaches["prompt_to_try"] = (
+            "When I reject a command, tell me why it might have seemed risky "
+            "and whether that risk was real. Help me calibrate."
+        )
+        approaches["claude_md_suggestion"] = (
+            "Add to CLAUDE.md: 'Explain the risk level (none/low/medium/high) "
+            "before suggesting commands that modify files or state.'"
+        )
+        approaches["workflow_shift"] = (
+            "Track your rejections for a week. Are they catching real risks "
+            "or just unfamiliar patterns? Adjust your threshold accordingly."
+        )
+
+    # Agent-specific advice
+    if agent_rate < 0.02:
+        approaches["agent_advice"] = (
+            "You're not using agents. Try: 'Use the Task tool to explore "
+            "this codebase and find where X is implemented.' Agents are "
+            "good for uncertain searches where you'd otherwise iterate."
+        )
+    elif agent_rate > 0.15:
+        approaches["agent_advice"] = (
+            "Heavy agent user. Make sure you're not over-orchestrating. "
+            "Sometimes a direct command is faster than spawning an agent."
+        )
+
+    return approaches

@@ -8,7 +8,7 @@ Analyzes how you govern AI coding assistants and maps your
 patterns to historical archetypes.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __author__ = "Amadeus Woo"
 
 from .models import UserGovernanceProfile, SessionAnalysis, ToolEvent

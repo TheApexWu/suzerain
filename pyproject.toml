@@ -1,7 +1,7 @@
 [project]
 name = "suzerain"
-version = "0.2.0"
-description = "Understand your AI governance style - analyze how you use AI coding assistants"
+version = "0.4.0"
+description = "What kind of AI ruler are you? Analyze your Claude Code governance patterns."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

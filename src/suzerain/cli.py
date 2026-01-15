@@ -22,6 +22,7 @@ from .classifier import classify_user
 from .insights import (
     get_archetype_insight,
     get_pattern_insight,
+    get_prompting_approaches,
     generate_insight_summary,
 )
 
@@ -88,23 +89,70 @@ def print_profile_compact(profile, classification):
         print(line)
     print("  └────────────────────────────────────────────────────────┘")
 
-    # Key metrics
+    # Raw numbers
     print()
-    print("  ┌─ KEY METRICS ─────────────────────────────────────────┐")
+    print("  ┌─ RAW NUMBERS ─────────────────────────────────────────┐")
+    bash_stats = profile.trust_by_tool.get('Bash', {})
+    bash_total = bash_stats.get('total', 0)
+    bash_accepted = bash_stats.get('accepted', 0)
+    bash_rejected = bash_total - bash_accepted
+    print(f"  │ Total tool calls:     {profile.total_tool_calls:,}")
+    print(f"  │ Bash commands:        {bash_total} ({bash_accepted} accepted, {bash_rejected} rejected)")
+    print(f"  │ Sessions:             {profile.sessions_analyzed}")
+    print(f"  │ Days of data:         {profile.data_collection_days}")
+    print(f"  │ Mean decision time:   {profile.mean_decision_time_ms:.0f}ms")
+    print("  └────────────────────────────────────────────────────────┘")
+
+    # Derived metrics
     kf = classification.key_features
     sf = classification.subtle_features
-    print(f"  │ Bash acceptance:      {kf['bash_acceptance_rate']:.0%} ← THE discriminator")
-    print(f"  │ Snap judgments:       {kf['snap_judgment_rate']:.0%} (decisions < 500ms)")
-    print(f"  │ Risk delta:           {kf['risk_trust_delta']:+.0%} (safe vs risky trust gap)")
+    print()
+    print("  ┌─ DERIVED METRICS ─────────────────────────────────────┐")
+    print(f"  │ Bash acceptance:      {kf['bash_acceptance_rate']:.0%} ← the main signal")
+    print(f"  │ Snap judgments:       {kf['snap_judgment_rate']:.0%} (< 500ms)")
+    print(f"  │ Risk delta:           {kf['risk_trust_delta']:+.0%} (safe vs risky gap)")
     print(f"  │ Sophistication:       {sf.get('sophistication_score', 0):.2f}")
     print(f"  │ Caution:              {sf.get('caution_score', 0):.2f}")
     print("  └────────────────────────────────────────────────────────┘")
 
-    # One thing to try
+    # Prompting approaches
+    approaches = get_prompting_approaches(classification)
     print()
-    print("  ┌─ ONE THING TO TRY ───────────────────────────────────┐")
-    one_thing = pattern_insight["one_thing_to_try"]
-    words = one_thing.split()
+    print("  ┌─ PROMPTING APPROACHES ────────────────────────────────┐")
+    print(f"  │ Framework: {approaches['thinking_framework'][:45]}...")
+    print("  │")
+    print("  │ Prompt to try:")
+    prompt = approaches['prompt_to_try']
+    words = prompt.split()
+    line = "  │   \""
+    for word in words:
+        if len(line) + len(word) > 56:
+            print(line)
+            line = "  │    " + word + " "
+        else:
+            line += word + " "
+    if line.strip() != "│":
+        print(line.rstrip() + "\"")
+    print("  │")
+    print("  │ CLAUDE.md suggestion:")
+    suggestion = approaches['claude_md_suggestion']
+    words = suggestion.split()
+    line = "  │   "
+    for word in words:
+        if len(line) + len(word) > 56:
+            print(line)
+            line = "  │   " + word + " "
+        else:
+            line += word + " "
+    if line.strip() != "│":
+        print(line)
+    print("  └────────────────────────────────────────────────────────┘")
+
+    # Workflow shift
+    print()
+    print("  ┌─ TRY THIS ────────────────────────────────────────────┐")
+    workflow = approaches['workflow_shift']
+    words = workflow.split()
     line = "  │ "
     for word in words:
         if len(line) + len(word) > 58:
@@ -114,6 +162,20 @@ def print_profile_compact(profile, classification):
             line += word + " "
     if line.strip() != "│":
         print(line)
+    # Agent advice if present
+    if 'agent_advice' in approaches:
+        print("  │")
+        agent = approaches['agent_advice']
+        words = agent.split()
+        line = "  │ "
+        for word in words:
+            if len(line) + len(word) > 58:
+                print(line)
+                line = "  │ " + word + " "
+            else:
+                line += word + " "
+        if line.strip() != "│":
+            print(line)
     print("  └────────────────────────────────────────────────────────┘")
 
     # Data summary with uncertainty
@@ -287,6 +349,26 @@ def export_data(profile, classification, parser):
     print(f"  Exported to: {output_file}")
 
 
+def bucket_count(n: int) -> str:
+    """Bucket counts to reduce fingerprinting."""
+    if n < 10:
+        return "1-9"
+    elif n < 25:
+        return "10-24"
+    elif n < 50:
+        return "25-49"
+    elif n < 100:
+        return "50-99"
+    elif n < 250:
+        return "100-249"
+    elif n < 500:
+        return "250-499"
+    elif n < 1000:
+        return "500-999"
+    else:
+        return f"{(n // 1000) * 1000}+"
+
+
 def preview_share(profile, classification):
     """Show what would be shared."""
     print()
@@ -296,39 +378,48 @@ def preview_share(profile, classification):
 
     print("\n  The following WOULD be shared:\n")
 
+    # Bucket counts to reduce fingerprinting risk
     share_data = {
         "summary": {
-            "sessions_analyzed": profile.sessions_analyzed,
-            "total_tool_calls": profile.total_tool_calls,
-            "data_days": profile.data_collection_days,
+            "sessions_bucket": bucket_count(profile.sessions_analyzed),
+            "tool_calls_bucket": bucket_count(profile.total_tool_calls),
+            "data_days_bucket": bucket_count(profile.data_collection_days),
         },
         "governance": {
-            "bash_acceptance_rate": round(classification.key_features['bash_acceptance_rate'], 3),
-            "overall_acceptance_rate": round(profile.acceptance_rate, 3),
-            "high_risk_acceptance": round(profile.high_risk_acceptance, 3),
-            "snap_judgment_rate": round(classification.key_features['snap_judgment_rate'], 3),
+            "bash_acceptance_rate": round(classification.key_features['bash_acceptance_rate'], 2),
+            "overall_acceptance_rate": round(profile.acceptance_rate, 2),
+            "high_risk_acceptance": round(profile.high_risk_acceptance, 2),
+            "snap_judgment_rate": round(classification.key_features['snap_judgment_rate'], 2),
         },
         "sophistication": {
-            "agent_spawn_rate": round(classification.subtle_features.get('agent_spawn_rate', 0), 3),
-            "tool_diversity": round(classification.subtle_features.get('tool_diversity', 0), 1),
-            "session_depth": round(classification.subtle_features.get('session_depth', 0), 0),
+            "agent_spawn_rate": round(classification.subtle_features.get('agent_spawn_rate', 0), 2),
+            "tool_diversity": round(classification.subtle_features.get('tool_diversity', 0), 0),
+            "session_depth_bucket": bucket_count(int(classification.subtle_features.get('session_depth', 0))),
         },
         "classification": {
             "pattern": classification.primary_pattern,
             "archetype": classification.archetype,
-            "sophistication_score": round(classification.subtle_features.get('sophistication_score', 0), 2),
-            "caution_score": round(classification.subtle_features.get('caution_score', 0), 2),
+            "sophistication_score": round(classification.subtle_features.get('sophistication_score', 0), 1),
+            "caution_score": round(classification.subtle_features.get('caution_score', 0), 1),
         }
     }
 
     print(json.dumps(share_data, indent=2))
 
-    print("\n  NOT shared:")
+    print("\n  Privacy measures:")
+    print("    ✓ Counts bucketed (not exact values)")
+    print("    ✓ Rates rounded to 2 decimal places")
+    print("    ✓ No persistent user ID")
+    print()
+    print("  NOT shared:")
     print("    ✗ Prompts or conversations")
     print("    ✗ File paths or code")
     print("    ✗ Command contents")
     print("    ✗ Project names")
-    print("    ✗ Timestamps (only durations)")
+    print("    ✗ Timestamps")
+    print("    ✗ IP address (server doesn't log)")
+    print()
+    print("  See docs/PRIVACY.md for full disclosure.")
     print()
 
     return share_data
