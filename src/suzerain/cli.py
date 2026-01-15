@@ -12,6 +12,8 @@ Usage:
 import argparse
 import json
 import sys
+import urllib.request
+import urllib.error
 from pathlib import Path
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -28,6 +30,7 @@ from .insights import (
 
 
 OUTPUT_DIR = Path.home() / ".suzerain" / "analysis"
+SHARE_API_URL = "https://suzerain.dev/api/share"
 
 
 def print_header():
@@ -471,10 +474,62 @@ def cmd_share(args):
         return 0
 
     if args.confirm:
-        preview_share(profile, classification)
-        print("  ⚠️  Data sharing not yet implemented.")
-        print("  This will send anonymized metrics to help improve Suzerain.")
-        print("  Check https://github.com/amadeuswoo/suzerain for updates.")
+        share_data = preview_share(profile, classification)
+
+        # Add version to payload
+        share_data["version"] = __version__
+
+        print("  Sending to suzerain.dev...")
+
+        try:
+            # Prepare the request
+            data = json.dumps(share_data).encode('utf-8')
+            req = urllib.request.Request(
+                SHARE_API_URL,
+                data=data,
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': f'suzerain-cli/{__version__}'
+                },
+                method='POST'
+            )
+
+            # Send the request
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = json.loads(response.read().decode('utf-8'))
+
+            if result.get('success'):
+                print()
+                print("  ╔═══════════════════════════════════════════════════════╗")
+                print("  ║  Thanks for contributing to the research.             ║")
+                print("  ║  Your anonymized metrics help us understand           ║")
+                print("  ║  how developers govern AI assistants.                 ║")
+                print("  ╚═══════════════════════════════════════════════════════╝")
+                print()
+                print(f"  Submission ID: {result.get('id', 'unknown')}")
+                print()
+            else:
+                print(f"  Error: {result.get('error', 'Unknown error')}")
+                return 1
+
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            try:
+                error_data = json.loads(error_body)
+                print(f"  Error: {error_data.get('error', 'Server error')}")
+            except json.JSONDecodeError:
+                print(f"  Error: HTTP {e.code}")
+            return 1
+
+        except urllib.error.URLError as e:
+            print(f"  Connection failed: {e.reason}")
+            print("  Check your internet connection or try again later.")
+            return 1
+
+        except Exception as e:
+            print(f"  Unexpected error: {e}")
+            return 1
+
         return 0
 
     print("  Use --preview to see what would be shared")
