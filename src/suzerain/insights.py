@@ -1,12 +1,10 @@
 """
-Insights Engine: Bottleneck identification and actionable recommendations.
+Archetype definitions and insights.
 
-Maps archetypes to:
-1. Language game patterns (Wittgensteinian framing)
-2. Prompting bottlenecks (what slows you down)
-3. Actionable recommendations (how to improve)
-
-Karpathy-approved: grounded in empirical features, mechanistically clear.
+Each archetype has:
+- A governance style (how you interact with the AI)
+- A bottleneck (what slows you down)
+- Recommendations (what to try)
 """
 
 from dataclasses import dataclass
@@ -17,27 +15,15 @@ from .models import Classification
 
 @dataclass
 class ArchetypeInsight:
-    """Full insight package for an archetype."""
+    """Insight package for an archetype."""
     name: str
-
-    # The language game (Wittgensteinian framing)
     language_game: str
     game_description: str
-
-    # The bottleneck (what slows you down)
     bottleneck: str
     bottleneck_description: str
-
-    # Mechanistic explanation (why this pattern emerges)
     mechanism: str
-
-    # Actionable recommendations
     recommendations: List[str]
-
-    # What to watch for
     risk: str
-
-    # Historical parallel (for color, not core)
     historical_parallel: str
 
 

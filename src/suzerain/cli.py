@@ -88,9 +88,9 @@ def print_profile_compact(profile, classification):
         print(line)
     print("  └────────────────────────────────────────────────────────┘")
 
-    # Key metrics (the empirical grounding)
+    # Key metrics
     print()
-    print("  ┌─ KEY METRICS (Karpathy-approved) ────────────────────┐")
+    print("  ┌─ KEY METRICS ─────────────────────────────────────────┐")
     kf = classification.key_features
     sf = classification.subtle_features
     print(f"  │ Bash acceptance:      {kf['bash_acceptance_rate']:.0%} ← THE discriminator")

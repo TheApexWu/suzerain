@@ -1,11 +1,14 @@
 """
-Suzerain: Understand your AI governance style
+Suzerain: What kind of AI ruler are you?
 
-Analyzes how you use AI coding assistants and maps your behavior
-to historical governance patterns.
+"The suzerain rules even where there are other kings.
+ There is no territory outside his claim."
+
+Analyzes how you govern AI coding assistants and maps your
+patterns to historical archetypes.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "Amadeus Woo"
 
 from .models import UserGovernanceProfile, SessionAnalysis, ToolEvent

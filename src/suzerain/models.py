@@ -1,6 +1,4 @@
-"""
-Data models for governance analysis.
-"""
+"""Data models."""
 
 from dataclasses import dataclass, field
 from datetime import datetime

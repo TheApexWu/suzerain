@@ -1,8 +1,8 @@
 """
 Claude Code log parser.
 
-Extracts governance behavior from Claude Code's existing logs.
-No manual instrumentation needed - parse what already exists.
+Parses ~/.claude/projects/{project}/{session}.jsonl files
+and extracts tool acceptance/rejection events.
 """
 
 import json
