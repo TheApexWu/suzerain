@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suzerain — What kind of AI ruler are you?</title>
+  <meta name="description" content="Analyze your Claude Code governance patterns. Understand how you rule your AI tools.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-dark: #0D0808;
+      --bg-mid: #1A0F0F;
+      --bg-light: #241818;
+      --maroon: #722F37;
+      --maroon-dim: #4A1515;
+      --gold: #C9A227;
+      --text: #E8E8E8;
+      --text-dim: #888;
+      --text-muted: #555;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: 'EB Garamond', serif;
+      line-height: 1.7;
+      font-size: 20px;
+    }
+
+    /* ==================== NAV ==================== */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.25rem 3rem;
+      background: rgba(13, 8, 8, 0.9);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(114, 47, 55, 0.2);
+      z-index: 100;
+    }
+
+    .nav-logo {
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      letter-spacing: 0.25em;
+      color: var(--maroon);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2.5rem;
+    }
+
+    .nav-links a {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-dim);
+    }
+
+    /* ==================== HERO ==================== */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+    }
+
+    .hero-left {
+      padding: 8rem 5rem 5rem 5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .hero-eyebrow {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 3rem;
+    }
+
+    .dialogue {
+      margin-bottom: 3rem;
+    }
+
+    .dialogue-line {
+      margin-bottom: 1.5rem;
+    }
+
+    .dialogue-speaker {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .dialogue-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.6rem;
+      font-style: italic;
+      color: var(--text);
+      padding-left: 1.25rem;
+      border-left: 2px solid var(--maroon);
+      line-height: 1.5;
+    }
+
+    .dialogue-text.emphasis {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .hero-hook {
+      font-family: 'Cinzel', serif;
+      font-size: 1.15rem;
+      color: var(--maroon);
+      margin-top: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    .hero-right {
+      background: var(--bg-mid);
+      padding: 8rem 3rem 3rem 3rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-left: 1px solid var(--maroon-dim);
+    }
+
+    .install-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .install-cmd {
+      background: var(--bg-dark);
+      padding: 1rem 1.25rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+      border: 1px solid var(--maroon-dim);
+    }
+
+    .install-cmd .prompt { color: var(--maroon); }
+    .install-cmd .text { color: var(--text); }
+
+    .hero-stats {
+      margin-top: 2rem;
+    }
+
+    .hero-stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--bg-light);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    .hero-stat-label { color: var(--text-muted); }
+    .hero-stat-value { color: var(--text-dim); }
+
+    /* ==================== SECTION STYLES ==================== */
+    section {
+      padding: 6rem 5rem;
+    }
+
+    .section-dark { background: var(--bg-dark); }
+    .section-mid { background: var(--bg-mid); }
+
+    .section-number {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      color: var(--maroon);
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.75rem;
+      color: var(--text);
+      margin-bottom: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    .section-content {
+      max-width: 700px;
+    }
+
+    .section-content p {
+      margin-bottom: 1.5rem;
+      color: var(--text-dim);
+    }
+
+    .section-content p.lead {
+      font-size: 1.2rem;
+      color: var(--text);
+    }
+
+    .section-content strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .section-content a {
+      color: var(--maroon);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* ==================== CLI OUTPUT ==================== */
+    .cli-output {
+      max-width: 750px;
+      margin-top: 2rem;
+    }
+
+    .cli-window {
+      background: #0a0606;
+      border: 1px solid var(--maroon-dim);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .cli-bar {
+      background: var(--bg-mid);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--maroon-dim);
+    }
+
+    .cli-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #333;
+    }
+
+    .cli-dot.red { background: var(--maroon); }
+    .cli-dot.yellow { background: #705020; }
+    .cli-dot.green { background: #2d4a2d; }
+
+    .cli-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: 0.5rem;
+    }
+
+    .cli-content {
+      padding: 1.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--text);
+      overflow-x: auto;
+      margin: 0;
+    }
+
+    .cli-box { color: var(--maroon); }
+    .cli-highlight { color: var(--gold); font-weight: 500; }
+    .cli-dim { color: #4a3030; }
+    .cli-muted { color: var(--text-muted); }
+    .cli-gold { color: var(--gold); }
+
+    /* ==================== WHAT IS IT ==================== */
+    .what-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      margin-top: 3rem;
+    }
+
+    .what-box {
+      padding: 2rem;
+      background: var(--bg-mid);
+      border-left: 3px solid var(--maroon-dim);
+    }
+
+    .what-box h4 {
+      font-family: 'Cinzel', serif;
+      font-size: 1rem;
+      color: var(--maroon);
+      margin-bottom: 1rem;
+      letter-spacing: 0.1em;
+    }
+
+    .what-box p {
+      font-size: 0.95rem;
+      color: var(--text-dim);
+      margin: 0;
+    }
+
+    /* ==================== THE FINDING ==================== */
+    .finding-highlight {
+      background: var(--bg-light);
+      border-left: 3px solid var(--gold);
+      padding: 2rem;
+      margin: 2rem 0;
+    }
+
+    .finding-highlight p {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.4rem;
+      color: var(--text);
+      margin: 0;
+      font-style: italic;
+    }
+
+    .finding-highlight .metric {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1.1rem;
+      color: var(--gold);
+      font-style: normal;
+    }
+
+    /* ==================== ARCHETYPES ==================== */
+    .archetypes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    .archetype-card {
+      background: var(--bg-dark);
+      border: 1px solid var(--bg-light);
+      padding: 1.5rem;
+      transition: border-color 0.2s;
+    }
+
+    .archetype-card:hover {
+      border-color: var(--maroon-dim);
+    }
+
+    .archetype-name {
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      color: var(--maroon);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.1em;
+    }
+
+    .archetype-style {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .archetype-desc {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .archetype-parallel {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--bg-light);
+    }
+
+    /* ==================== JOURNEY ==================== */
+    .journey-timeline {
+      margin-top: 3rem;
+      border-left: 1px solid var(--maroon-dim);
+      padding-left: 2rem;
+    }
+
+    .journey-item {
+      margin-bottom: 3rem;
+      position: relative;
+    }
+
+    .journey-item::before {
+      content: '';
+      position: absolute;
+      left: -2rem;
+      top: 0.5rem;
+      width: 8px;
+      height: 8px;
+      background: var(--maroon);
+      border-radius: 50%;
+      margin-left: -4px;
+    }
+
+    .journey-phase {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      color: var(--maroon);
+      margin-bottom: 0.5rem;
+    }
+
+    .journey-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.3rem;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+
+    .journey-desc {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+    }
+
+    /* ==================== HONEST SECTION ==================== */
+    .honest-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      margin-top: 2rem;
+    }
+
+    .honest-col h4 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    .honest-col ul {
+      list-style: none;
+    }
+
+    .honest-col li {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--bg-light);
+      font-size: 0.9rem;
+      color: var(--text-dim);
+    }
+
+    .honest-col li::before {
+      content: '→ ';
+      color: var(--maroon);
+    }
+
+    /* ==================== CTA ==================== */
+    .cta {
+      text-align: center;
+      padding: 6rem 3rem;
+      background: linear-gradient(180deg, var(--bg-mid) 0%, var(--bg-dark) 100%);
+    }
+
+    .cta-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.5rem;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+
+    .cta-subtitle {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      color: var(--text-dim);
+      font-style: italic;
+      margin-bottom: 2.5rem;
+    }
+
+    .cta-cmd {
+      display: inline-block;
+      background: var(--bg-dark);
+      border: 1px solid var(--maroon);
+      padding: 1rem 2rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    .cta-cmd .prompt { color: var(--maroon); }
+    .cta-cmd .text { color: var(--text); }
+
+    .cta-links {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+
+    .cta-links a {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--bg-light);
+      transition: all 0.2s;
+    }
+
+    .cta-links a:hover {
+      border-color: var(--maroon-dim);
+      color: var(--text-dim);
+    }
+
+    /* ==================== FOOTER ==================== */
+    footer {
+      padding: 3rem 5rem;
+      border-top: 1px solid var(--bg-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-quote {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .footer-meta {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* ==================== RESPONSIVE ==================== */
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-left {
+        padding: 6rem 2rem 3rem 2rem;
+      }
+
+      .hero-right {
+        padding: 3rem 2rem;
+        border-left: none;
+        border-top: 1px solid var(--maroon-dim);
+      }
+
+      section {
+        padding: 4rem 2rem;
+      }
+
+      .what-grid,
+      .honest-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .archetypes-grid {
+        grid-template-columns: 1fr;
+      }
+
+      nav {
+        padding: 1rem 1.5rem;
+      }
+
+      .nav-links {
+        gap: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo">SUZERAIN</div>
+    <div class="nav-links">
+      <a href="#output">OUTPUT</a>
+      <a href="#what">WHAT</a>
+      <a href="#archetypes">ARCHETYPES</a>
+      <a href="#journey">STORY</a>
+      <a href="https://github.com/TheApexWu/suzerain">GITHUB</a>
+      <a href="https://pypi.org/project/suzerain/">PYPI</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-left">
+      <div class="hero-eyebrow">From Cormac McCarthy's Blood Meridian</div>
+      <div class="dialogue">
+        <div class="dialogue-line">
+          <div class="dialogue-text">What's a suzerain?</div>
+        </div>
+        <div class="dialogue-line">
+          <div class="dialogue-text">A keeper. A keeper or overlord.</div>
+        </div>
+        <div class="dialogue-line">
+          <div class="dialogue-text">Why not say keeper then?</div>
+        </div>
+        <div class="dialogue-line">
+          <div class="dialogue-text emphasis">Because he is a special kind of keeper. A suzerain rules even where there are other kings. His authority countermands local judgements.</div>
+        </div>
+      </div>
+      <div class="hero-hook">You are the suzerain. The AI executes, but you rule.</div>
+    </div>
+    <div class="hero-right">
+      <div class="install-label">INSTALL</div>
+      <div class="install-cmd">
+        <span class="prompt">$</span> <span class="text">pip install suzerain</span>
+      </div>
+      <div class="install-label">ANALYZE</div>
+      <div class="install-cmd">
+        <span class="prompt">$</span> <span class="text">suzerain analyze</span>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <span class="hero-stat-label">version</span>
+          <span class="hero-stat-value">0.4.0</span>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-label">dependencies</span>
+          <span class="hero-stat-value">0 (stdlib only)</span>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-label">data collection</span>
+          <span class="hero-stat-value">opt-in only</span>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-label">runs</span>
+          <span class="hero-stat-value">100% local</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- SAMPLE OUTPUT -->
+  <section id="output" class="section-dark">
+    <div class="section-number">00</div>
+    <h2 class="section-title">What You Get</h2>
+    <div class="cli-output">
+      <div class="cli-window">
+        <div class="cli-bar">
+          <span class="cli-dot red"></span>
+          <span class="cli-dot yellow"></span>
+          <span class="cli-dot green"></span>
+          <span class="cli-title">suzerain analyze</span>
+        </div>
+        <pre class="cli-content">
+  <span class="cli-box">╔═══════════════════════════════════════════════════════╗
+  ║                      SUZERAIN                         ║
+  ║                                                       ║
+  ║   "The suzerain rules even where there are other      ║
+  ║    kings. There is no territory outside his claim."   ║
+  ╚═══════════════════════════════════════════════════════╝</span>
+
+  Your recent pattern: <span class="cli-highlight">STRATEGIST</span>
+  Empirical cluster: Power User (Cautious)
+
+  <span class="cli-dim">┌─ RAW NUMBERS ─────────────────────────────────────────┐</span>
+  <span class="cli-dim">│</span> Total tool calls:     <span class="cli-gold">6,654</span>
+  <span class="cli-dim">│</span> Bash commands:        <span class="cli-gold">3006</span> <span class="cli-muted">(1685 accepted, 1321 rejected)</span>
+  <span class="cli-dim">│</span> Sessions:             <span class="cli-gold">73</span>
+  <span class="cli-dim">│</span> Days of data:         <span class="cli-gold">27</span>
+  <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
+
+  <span class="cli-dim">┌─ DERIVED METRICS ─────────────────────────────────────┐</span>
+  <span class="cli-dim">│</span> Bash acceptance:      <span class="cli-gold">56%</span> <span class="cli-muted">← the main signal</span>
+  <span class="cli-dim">│</span> Snap judgments:       <span class="cli-gold">63%</span> <span class="cli-muted">(< 500ms)</span>
+  <span class="cli-dim">│</span> Risk delta:           <span class="cli-gold">+31%</span> <span class="cli-muted">(safe vs risky gap)</span>
+  <span class="cli-dim">│</span> Sophistication:       <span class="cli-gold">0.75</span>
+  <span class="cli-dim">│</span> Caution:              <span class="cli-gold">0.80</span>
+  <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
+
+  <span class="cli-dim">┌─ PROMPTING APPROACHES ────────────────────────────────┐</span>
+  <span class="cli-dim">│</span> Prompt to try:
+  <span class="cli-dim">│</span>   <span class="cli-muted">"When I reject a command, tell me why it might</span>
+  <span class="cli-dim">│</span>   <span class="cli-muted"> have seemed risky. Help me calibrate."</span>
+  <span class="cli-dim">│</span>
+  <span class="cli-dim">│</span> CLAUDE.md suggestion:
+  <span class="cli-dim">│</span>   <span class="cli-muted">Add: 'Explain risk level (none/low/medium/high)</span>
+  <span class="cli-dim">│</span>   <span class="cli-muted">before suggesting commands that modify state.'</span>
+  <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
+
+  Based on 73 sessions, 6,654 tool calls, 27 days
+  <span class="cli-muted">● Higher confidence: pattern appears stable</span>
+
+  <span class="cli-dim">─────────────────────────────────────────────────────────</span>
+  You are the suzerain. The AI executes, but you rule.
+        </pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT IS SUZERAIN -->
+  <section id="what" class="section-mid">
+    <div class="section-number">01</div>
+    <h2 class="section-title">What is Suzerain?</h2>
+    <div class="section-content">
+      <p class="lead">A tool that reads your Claude Code logs and tells you how you use AI.</p>
+      <p>Every time Claude suggests a bash command, you either accept or reject it. Do that hundreds of times across dozens of sessions and patterns start to show. Suzerain finds those patterns.</p>
+      <p>It parses your logs, calculates your acceptance rates and decision timing, then classifies you into one of six archetypes. You get a name for your style and an honest look at what slows you down.</p>
+    </div>
+    <div class="what-grid">
+      <div class="what-box">
+        <h4>What it does</h4>
+        <p>Parses ~/.claude/projects/ logs. Calculates acceptance rates, decision timing, tool diversity. Spits out your archetype and bottleneck.</p>
+      </div>
+      <div class="what-box">
+        <h4>What it doesn't do</h4>
+        <p>Read your prompts. See your code. Track keystrokes. Phone home. Everything runs locally. Sharing is opt-in.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT I FOUND -->
+  <section id="findings" class="section-dark">
+    <div class="section-number">02</div>
+    <h2 class="section-title">What I Found</h2>
+    <div class="section-content">
+      <p>I looked at my own logs. 73 sessions, 6,654 tool calls. Pretty simple observation:</p>
+      <div class="finding-highlight">
+        <p><span class="metric">Bash acceptance</span> was the only thing that varied. Read, Edit, Write, Glob, Grep were all at ~100%.</p>
+      </div>
+      <p>I rubber-stamp everything except shell commands. That's where I actually think before clicking accept.</p>
+      <p>From there I broke it into two axes:</p>
+      <p><strong>Sophistication</strong> (0-1): Do you use agents? Parallel tasks? Or just basic stuff?</p>
+      <p><strong>Caution</strong> (0-1): Do you reject commands? Slow down on risky ones?</p>
+      <p>These two are independent. You can be cautious and sophisticated, or trusting and casual. The combo gives you an archetype.</p>
+    </div>
+  </section>
+
+  <!-- ARCHETYPES -->
+  <section id="archetypes" class="section-mid">
+    <div class="section-number">03</div>
+    <h2 class="section-title">The Six Archetypes</h2>
+    <div class="section-content">
+      <p>Six patterns showed up in the data. Each one has a style, a bottleneck, and a historical parallel for flavor.</p>
+    </div>
+    <div class="archetypes-grid">
+      <div class="archetype-card">
+        <div class="archetype-name">DELEGATOR</div>
+        <div class="archetype-style">The Acceptance Game</div>
+        <div class="archetype-desc">Accept everything, fast. Throughput above all. Errors surface downstream—in tests, in production, in code review.</div>
+        <div class="archetype-parallel">Mongol Horde — trust the generals</div>
+      </div>
+      <div class="archetype-card">
+        <div class="archetype-name">AUTOCRAT</div>
+        <div class="archetype-style">The Review Game</div>
+        <div class="archetype-desc">Review everything, approve everything. The ritual of witnessed consent. Cognitive overhead without risk reduction.</div>
+        <div class="archetype-parallel">Roman Emperor — sees all petitions</div>
+      </div>
+      <div class="archetype-card">
+        <div class="archetype-name">STRATEGIST</div>
+        <div class="archetype-style">The Discrimination Game</div>
+        <div class="archetype-desc">Different rules for different tools. Safe operations flow through; risky ones face scrutiny. Decision overhead on edge cases.</div>
+        <div class="archetype-parallel">Napoleon — micromanages key battles</div>
+      </div>
+      <div class="archetype-card">
+        <div class="archetype-name">DELIBERATOR</div>
+        <div class="archetype-style">The Consideration Game</div>
+        <div class="archetype-desc">Every suggestion requires thought. Quality is high but quantity suffers. Decision latency on all operations.</div>
+        <div class="archetype-parallel">Athenian Assembly — thorough debate</div>
+      </div>
+      <div class="archetype-card">
+        <div class="archetype-name">COUNCIL</div>
+        <div class="archetype-style">The Orchestration Game</div>
+        <div class="archetype-desc">Deploys agents, parallel tasks, complex workflows. You're the conductor. Bottleneck is coordination overhead.</div>
+        <div class="archetype-parallel">Venetian Republic — distributed trust</div>
+      </div>
+      <div class="archetype-card">
+        <div class="archetype-name">CONSTITUTIONALIST</div>
+        <div class="archetype-style">The Consistency Game</div>
+        <div class="archetype-desc">Predictable patterns, session to session. Implicit rules. Efficient until the situation changes. Risk is rigidity.</div>
+        <div class="archetype-parallel">Constitutional systems — stable rules</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE JOURNEY -->
+  <section id="journey" class="section-dark">
+    <div class="section-number">04</div>
+    <h2 class="section-title">How This Happened</h2>
+    <div class="section-content">
+      <p class="lead">This started as something completely different.</p>
+    </div>
+    <div class="journey-timeline">
+      <div class="journey-item">
+        <div class="journey-phase">PHASE 1</div>
+        <div class="journey-title">Voice Wrapper (abandoned)</div>
+        <div class="journey-desc">I tried to build a voice interface for Claude Code. Speak prompts, hear responses. It worked but felt pointless. Solving a problem nobody had.</div>
+      </div>
+      <div class="journey-item">
+        <div class="journey-phase">PHASE 2</div>
+        <div class="journey-title">Noticed Something</div>
+        <div class="journey-desc">While debugging I caught myself accepting Read commands instantly but pausing on Bash. I trusted exploration but not execution. Started wondering if that meant anything.</div>
+      </div>
+      <div class="journey-item">
+        <div class="journey-phase">PHASE 3</div>
+        <div class="journey-title">Parsed My Logs</div>
+        <div class="journey-desc">62 sessions, 6,000 tool calls. Bash acceptance was all over the place. Everything else was at 100%. All the interesting decisions happened at the shell prompt.</div>
+      </div>
+      <div class="journey-item">
+        <div class="journey-phase">PHASE 4</div>
+        <div class="journey-title">Built the Framework</div>
+        <div class="journey-desc">Simulated 11 user personas (junior devs, security folks, staff engineers) to test if classification worked. Two axes showed up: sophistication and caution. Six archetypes mapped onto four quadrants. It held together.</div>
+      </div>
+      <div class="journey-item">
+        <div class="journey-phase">NOW</div>
+        <div class="journey-title">Need More Data</div>
+        <div class="journey-desc">N=1 is not enough. I need real users to see if these patterns generalize. Try the tool. If your archetype makes sense, consider sharing anonymized metrics so I can build a proper dataset.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EPISTEMIC HONESTY -->
+  <section class="section-mid">
+    <div class="section-number">05</div>
+    <h2 class="section-title">What I Know vs Don't Know</h2>
+    <div class="section-content">
+      <p>This is <strong>hypothesis-generating, not validated</strong>. Being upfront about the limits.</p>
+    </div>
+    <div class="honest-grid">
+      <div class="honest-col">
+        <h4>KNOW</h4>
+        <ul>
+          <li>Bash acceptance has variance, other tools don't</li>
+          <li>Features separate simulated personas correctly</li>
+          <li>Framework is internally consistent</li>
+          <li>Based on 1 real user + 11 simulated ones</li>
+        </ul>
+      </div>
+      <div class="honest-col">
+        <h4>DON'T KNOW</h4>
+        <ul>
+          <li>If patterns hold across different users</li>
+          <li>If archetypes stay stable over time</li>
+          <li>If bottlenecks actually predict anything</li>
+          <li>If my thresholds are right (they're guesses)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2 class="cta-title">What kind of ruler are you?</h2>
+    <p class="cta-subtitle">Find out in two commands.</p>
+    <div class="cta-cmd">
+      <span class="prompt">$</span> <span class="text">pip install suzerain && suzerain analyze</span>
+    </div>
+    <div class="cta-links">
+      <a href="https://github.com/TheApexWu/suzerain">VIEW SOURCE</a>
+      <a href="https://pypi.org/project/suzerain/">PYPI</a>
+      <a href="https://github.com/TheApexWu/suzerain/blob/main/docs/METHODOLOGY.md">METHODOLOGY</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-quote">"Whatever exists without my knowledge exists without my consent." — Judge Holden</div>
+    <div class="footer-meta">Built by Amadeus Woo · 2026</div>
+  </footer>
+
+</body>
+</html>

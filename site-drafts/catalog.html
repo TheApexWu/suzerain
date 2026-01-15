@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suzerain Design Catalog</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      color: #e8e8e8;
+      font-family: system-ui, sans-serif;
+      line-height: 1.6;
+    }
+
+    .catalog-section {
+      padding: 4rem 2rem;
+      border-bottom: 1px solid #222;
+    }
+
+    .catalog-section h2 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #666;
+      margin-bottom: 2rem;
+    }
+
+    /* ============================================
+       SECTION 1: COLOR PALETTES
+       ============================================ */
+    .palettes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .palette {
+      padding: 1.5rem;
+      border: 1px solid #222;
+    }
+
+    .palette h3 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+      color: #888;
+    }
+
+    .swatches {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .swatch {
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: flex-end;
+      padding: 0.25rem;
+      font-size: 0.6rem;
+      font-family: monospace;
+    }
+
+    /* Palette 1: Blood Meridian */
+    .palette-1 { background: #0D0808; }
+    .palette-1 .s1 { background: #0D0808; color: #666; }
+    .palette-1 .s2 { background: #1A0F0F; color: #666; }
+    .palette-1 .s3 { background: #4A1515; color: #999; }
+    .palette-1 .s4 { background: #722F37; color: #ddd; }
+    .palette-1 .s5 { background: #C9A227; color: #111; }
+
+    /* Palette 2: Occult Burgundy */
+    .palette-2 { background: #0A0A0F; }
+    .palette-2 .s1 { background: #0A0A0F; color: #666; }
+    .palette-2 .s2 { background: #1A1520; color: #666; }
+    .palette-2 .s3 { background: #3D1A2A; color: #999; }
+    .palette-2 .s4 { background: #800020; color: #ddd; }
+    .palette-2 .s5 { background: #D4AF37; color: #111; }
+
+    /* Palette 3: Dried Blood */
+    .palette-3 { background: #080606; }
+    .palette-3 .s1 { background: #080606; color: #666; }
+    .palette-3 .s2 { background: #151010; color: #666; }
+    .palette-3 .s3 { background: #2D1B1B; color: #999; }
+    .palette-3 .s4 { background: #5C2626; color: #ddd; }
+    .palette-3 .s5 { background: #B8860B; color: #111; }
+
+    /* Palette 4: Minimal Maroon */
+    .palette-4 { background: #0D0D0D; }
+    .palette-4 .s1 { background: #0D0D0D; color: #666; }
+    .palette-4 .s2 { background: #1A1A1A; color: #666; }
+    .palette-4 .s3 { background: #2A2A2A; color: #999; }
+    .palette-4 .s4 { background: #8B0000; color: #ddd; }
+    .palette-4 .s5 { background: #E8E8E8; color: #111; }
+
+    .palette-sample {
+      padding: 1rem;
+      font-size: 0.875rem;
+    }
+
+    .palette-sample .quote {
+      font-style: italic;
+      opacity: 0.9;
+    }
+
+    /* ============================================
+       SECTION 2: TYPOGRAPHY
+       ============================================ */
+    .font-samples {
+      display: grid;
+      gap: 3rem;
+    }
+
+    .font-sample {
+      padding: 2rem;
+      border: 1px solid #222;
+    }
+
+    .font-sample .font-name {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 1rem;
+    }
+
+    .font-sample .heading {
+      font-size: 2.5rem;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+      color: #722F37;
+    }
+
+    .font-sample .subhead {
+      font-size: 1.25rem;
+      opacity: 0.7;
+      margin-bottom: 1rem;
+    }
+
+    .font-sample .body {
+      font-size: 1rem;
+      max-width: 50ch;
+      opacity: 0.8;
+    }
+
+    /* Individual font families */
+    .cinzel .heading, .cinzel .subhead { font-family: 'Cinzel', serif; }
+    .cinzel .body { font-family: 'EB Garamond', serif; }
+
+    .cormorant .heading, .cormorant .subhead { font-family: 'Cormorant Garamond', serif; }
+    .cormorant .body { font-family: 'Cormorant Garamond', serif; }
+
+    .playfair .heading, .playfair .subhead { font-family: 'Playfair Display', serif; }
+    .playfair .body { font-family: 'Crimson Text', serif; }
+
+    .oldstandard .heading, .oldstandard .subhead { font-family: 'Old Standard TT', serif; }
+    .oldstandard .body { font-family: 'Old Standard TT', serif; }
+
+    .mono .heading { font-family: 'IBM Plex Mono', monospace; font-weight: 500; font-size: 2rem; }
+    .mono .subhead { font-family: 'IBM Plex Mono', monospace; }
+    .mono .body { font-family: 'IBM Plex Mono', monospace; font-size: 0.875rem; }
+
+    /* ============================================
+       SECTION 3: LAYOUT PATTERNS
+       ============================================ */
+    .layouts {
+      display: grid;
+      gap: 4rem;
+    }
+
+    .layout-demo {
+      border: 1px solid #222;
+      min-height: 400px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .layout-demo .layout-name {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #444;
+      z-index: 10;
+    }
+
+    /* Layout 1: Asymmetric Left Heavy */
+    .layout-asymmetric {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      background: #0D0808;
+    }
+
+    .layout-asymmetric .main {
+      padding: 4rem;
+      border-right: 1px solid #1A0F0F;
+    }
+
+    .layout-asymmetric .side {
+      padding: 4rem 2rem;
+      background: #1A0F0F;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      color: #666;
+    }
+
+    .layout-asymmetric h3 {
+      font-family: 'Cinzel', serif;
+      font-size: 1.75rem;
+      color: #722F37;
+      margin-bottom: 1.5rem;
+    }
+
+    .layout-asymmetric p {
+      font-family: 'EB Garamond', serif;
+      font-size: 1.1rem;
+      line-height: 1.7;
+      color: #999;
+    }
+
+    /* Layout 2: Diagonal Split */
+    .layout-diagonal {
+      background: linear-gradient(135deg, #0D0808 50%, #1A0F0F 50%);
+      display: flex;
+      align-items: center;
+      padding: 3rem;
+    }
+
+    .layout-diagonal .content {
+      max-width: 500px;
+    }
+
+    .layout-diagonal h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem;
+      color: #722F37;
+      margin-bottom: 1rem;
+    }
+
+    .layout-diagonal p {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      color: #888;
+    }
+
+    /* Layout 3: Broken Grid / Overlap */
+    .layout-broken {
+      background: #0A0A0A;
+      padding: 3rem;
+      position: relative;
+    }
+
+    .layout-broken .box1 {
+      background: #1A1A1A;
+      padding: 2rem;
+      width: 60%;
+      margin-left: 5%;
+    }
+
+    .layout-broken .box2 {
+      background: #722F37;
+      padding: 2rem;
+      width: 50%;
+      margin-left: 40%;
+      margin-top: -3rem;
+      position: relative;
+    }
+
+    .layout-broken .box3 {
+      border: 1px solid #333;
+      padding: 1.5rem;
+      width: 40%;
+      margin-left: 10%;
+      margin-top: -1rem;
+      background: #0A0A0A;
+    }
+
+    .layout-broken h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .layout-broken p {
+      font-family: 'Crimson Text', serif;
+      font-size: 0.9rem;
+      color: #888;
+    }
+
+    .layout-broken .box2 p { color: #ddd; }
+
+    /* Layout 4: Terminal / CLI */
+    .layout-terminal {
+      background: #0D0D0D;
+      font-family: 'IBM Plex Mono', monospace;
+      padding: 2rem;
+    }
+
+    .layout-terminal .window-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #222;
+    }
+
+    .layout-terminal .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #333;
+    }
+
+    .layout-terminal .dot.red { background: #722F37; }
+
+    .layout-terminal pre {
+      font-size: 0.8rem;
+      line-height: 1.8;
+      color: #888;
+    }
+
+    .layout-terminal .prompt { color: #722F37; }
+    .layout-terminal .command { color: #e8e8e8; }
+    .layout-terminal .output { color: #666; }
+    .layout-terminal .highlight { color: #C9A227; }
+
+    /* Layout 5: Editorial / Magazine */
+    .layout-editorial {
+      background: #0D0808;
+      display: grid;
+      grid-template-columns: 1fr 2px 2fr;
+      gap: 0;
+    }
+
+    .layout-editorial .col-left {
+      padding: 3rem 2rem;
+    }
+
+    .layout-editorial .divider {
+      background: #722F37;
+    }
+
+    .layout-editorial .col-right {
+      padding: 3rem 2rem;
+    }
+
+    .layout-editorial .pull-quote {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.75rem;
+      font-style: italic;
+      color: #722F37;
+      line-height: 1.4;
+      margin-bottom: 1rem;
+    }
+
+    .layout-editorial .attribution {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: #555;
+    }
+
+    .layout-editorial .body-text {
+      font-family: 'EB Garamond', serif;
+      font-size: 1rem;
+      color: #888;
+      line-height: 1.8;
+    }
+
+    .layout-editorial .body-text::first-letter {
+      font-size: 3rem;
+      float: left;
+      line-height: 1;
+      margin-right: 0.5rem;
+      color: #722F37;
+      font-family: 'Cinzel', serif;
+    }
+
+    /* Layout 6: Vertical Rhythm / Stacked */
+    .layout-stacked {
+      background: #080606;
+    }
+
+    .layout-stacked .band {
+      padding: 2rem 3rem;
+      border-bottom: 1px solid #151010;
+    }
+
+    .layout-stacked .band-dark { background: #080606; }
+    .layout-stacked .band-mid { background: #0D0A0A; }
+    .layout-stacked .band-accent { background: #1A0F0F; border-left: 3px solid #722F37; }
+
+    .layout-stacked h3 {
+      font-family: 'Old Standard TT', serif;
+      font-size: 1.25rem;
+      color: #ccc;
+      margin-bottom: 0.5rem;
+    }
+
+    .layout-stacked p {
+      font-family: 'Old Standard TT', serif;
+      font-size: 0.95rem;
+      color: #666;
+    }
+
+    .layout-stacked .metric {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 2rem;
+      color: #722F37;
+    }
+
+    /* ============================================
+       SECTION 4: FULL MOCKUP PREVIEW
+       ============================================ */
+    .mockup-preview {
+      border: 1px solid #222;
+      background: #0D0808;
+      min-height: 600px;
+    }
+
+    .mockup-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 3rem;
+      border-bottom: 1px solid #1A0F0F;
+    }
+
+    .mockup-logo {
+      font-family: 'Cinzel', serif;
+      font-size: 1rem;
+      letter-spacing: 0.2em;
+      color: #722F37;
+    }
+
+    .mockup-nav-links {
+      display: flex;
+      gap: 2rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: #555;
+    }
+
+    .mockup-hero {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      min-height: 500px;
+    }
+
+    .mockup-hero-left {
+      padding: 5rem 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .mockup-hero-left .eyebrow {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 2rem;
+    }
+
+    .mockup-hero-left .dialogue {
+      margin-bottom: 3rem;
+    }
+
+    .mockup-hero-left .line {
+      margin-bottom: 1rem;
+    }
+
+    .mockup-hero-left .speaker {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      color: #555;
+      margin-bottom: 0.25rem;
+    }
+
+    .mockup-hero-left .speech {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-style: italic;
+      color: #ccc;
+      padding-left: 1rem;
+      border-left: 2px solid #722F37;
+    }
+
+    .mockup-hero-left .hook {
+      font-family: 'Cinzel', serif;
+      font-size: 1.1rem;
+      color: #722F37;
+      margin-top: 2rem;
+    }
+
+    .mockup-hero-right {
+      background: #1A0F0F;
+      padding: 3rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .mockup-hero-right .install {
+      font-size: 0.7rem;
+      color: #555;
+      margin-bottom: 1rem;
+    }
+
+    .mockup-hero-right .cmd {
+      background: #0D0808;
+      padding: 1rem;
+      font-size: 0.8rem;
+      margin-bottom: 2rem;
+    }
+
+    .mockup-hero-right .cmd .prompt { color: #722F37; }
+    .mockup-hero-right .cmd .text { color: #ccc; }
+
+    .mockup-hero-right .stats {
+      font-size: 0.7rem;
+      color: #555;
+    }
+
+    .mockup-hero-right .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #2A1A1A;
+    }
+
+    .mockup-hero-right .stat-value { color: #888; }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== COLOR PALETTES ==================== -->
+  <section class="catalog-section">
+    <h2>01 / Color Palettes</h2>
+    <div class="palettes">
+
+      <div class="palette palette-1">
+        <h3>Blood Meridian</h3>
+        <div class="swatches">
+          <div class="swatch s1">#0D0808</div>
+          <div class="swatch s2">#1A0F0F</div>
+          <div class="swatch s3">#4A1515</div>
+          <div class="swatch s4">#722F37</div>
+          <div class="swatch s5">#C9A227</div>
+        </div>
+        <div class="palette-sample">
+          <p class="quote">"His authority countermands local judgements."</p>
+        </div>
+      </div>
+
+      <div class="palette palette-2">
+        <h3>Occult Burgundy</h3>
+        <div class="swatches">
+          <div class="swatch s1">#0A0A0F</div>
+          <div class="swatch s2">#1A1520</div>
+          <div class="swatch s3">#3D1A2A</div>
+          <div class="swatch s4">#800020</div>
+          <div class="swatch s5">#D4AF37</div>
+        </div>
+        <div class="palette-sample">
+          <p class="quote">"His authority countermands local judgements."</p>
+        </div>
+      </div>
+
+      <div class="palette palette-3">
+        <h3>Dried Blood</h3>
+        <div class="swatches">
+          <div class="swatch s1">#080606</div>
+          <div class="swatch s2">#151010</div>
+          <div class="swatch s3">#2D1B1B</div>
+          <div class="swatch s4">#5C2626</div>
+          <div class="swatch s5">#B8860B</div>
+        </div>
+        <div class="palette-sample">
+          <p class="quote">"His authority countermands local judgements."</p>
+        </div>
+      </div>
+
+      <div class="palette palette-4">
+        <h3>Minimal Maroon</h3>
+        <div class="swatches">
+          <div class="swatch s1">#0D0D0D</div>
+          <div class="swatch s2">#1A1A1A</div>
+          <div class="swatch s3">#2A2A2A</div>
+          <div class="swatch s4">#8B0000</div>
+          <div class="swatch s5">#E8E8E8</div>
+        </div>
+        <div class="palette-sample">
+          <p class="quote">"His authority countermands local judgements."</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== TYPOGRAPHY ==================== -->
+  <section class="catalog-section">
+    <h2>02 / Typography Pairings</h2>
+    <div class="font-samples">
+
+      <div class="font-sample cinzel">
+        <div class="font-name">Cinzel + EB Garamond — Inscriptional / Occult</div>
+        <div class="heading">SUZERAIN</div>
+        <div class="subhead">What kind of ruler are you?</div>
+        <p class="body">The suzerain rules even where there are other kings. There is no territory outside his claim. His authority countermands local judgements.</p>
+      </div>
+
+      <div class="font-sample cormorant">
+        <div class="font-name">Cormorant Garamond — Elegant / Literary</div>
+        <div class="heading">Suzerain</div>
+        <div class="subhead">What kind of ruler are you?</div>
+        <p class="body">The suzerain rules even where there are other kings. There is no territory outside his claim. His authority countermands local judgements.</p>
+      </div>
+
+      <div class="font-sample playfair">
+        <div class="font-name">Playfair Display + Crimson Text — Editorial</div>
+        <div class="heading">Suzerain</div>
+        <div class="subhead">What kind of ruler are you?</div>
+        <p class="body">The suzerain rules even where there are other kings. There is no territory outside his claim. His authority countermands local judgements.</p>
+      </div>
+
+      <div class="font-sample oldstandard">
+        <div class="font-name">Old Standard TT — Scholarly / Archaic</div>
+        <div class="heading">Suzerain</div>
+        <div class="subhead">What kind of ruler are you?</div>
+        <p class="body">The suzerain rules even where there are other kings. There is no territory outside his claim. His authority countermands local judgements.</p>
+      </div>
+
+      <div class="font-sample mono">
+        <div class="font-name">IBM Plex Mono — Technical / Brutalist</div>
+        <div class="heading">SUZERAIN</div>
+        <div class="subhead">What kind of ruler are you?</div>
+        <p class="body">The suzerain rules even where there are other kings. There is no territory outside his claim. His authority countermands local judgements.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== LAYOUT PATTERNS ==================== -->
+  <section class="catalog-section">
+    <h2>03 / Layout Patterns</h2>
+    <div class="layouts">
+
+      <!-- Asymmetric -->
+      <div class="layout-demo layout-asymmetric">
+        <span class="layout-name">Asymmetric Left-Heavy</span>
+        <div class="main">
+          <h3>What's a suzerain?</h3>
+          <p>A keeper. A keeper or overlord. The suzerain rules even where there are other kings. There is no territory outside his claim.</p>
+        </div>
+        <div class="side">
+          <p>pip install suzerain</p>
+          <br>
+          <p>v0.3.0</p>
+          <p>0 dependencies</p>
+          <p>local-first</p>
+        </div>
+      </div>
+
+      <!-- Diagonal -->
+      <div class="layout-demo layout-diagonal">
+        <span class="layout-name">Diagonal Split</span>
+        <div class="content">
+          <h3>The suzerain rules even where there are other kings.</h3>
+          <p>There is no territory outside his claim. His authority countermands local judgements.</p>
+        </div>
+      </div>
+
+      <!-- Broken Grid -->
+      <div class="layout-demo layout-broken">
+        <span class="layout-name">Broken Grid / Overlap</span>
+        <div class="box1">
+          <h3>What's a suzerain?</h3>
+          <p>A keeper. A keeper or overlord.</p>
+        </div>
+        <div class="box2">
+          <h3>Why not say keeper?</h3>
+          <p>Because he is a special kind of keeper.</p>
+        </div>
+        <div class="box3">
+          <p>His authority countermands local judgements.</p>
+        </div>
+      </div>
+
+      <!-- Terminal -->
+      <div class="layout-demo layout-terminal">
+        <span class="layout-name">Terminal / CLI Aesthetic</span>
+        <div class="window-bar">
+          <div class="dot red"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+        <pre>
+<span class="prompt">$</span> <span class="command">pip install suzerain</span>
+<span class="output">Successfully installed suzerain-0.3.0</span>
+
+<span class="prompt">$</span> <span class="command">suzerain analyze</span>
+
+<span class="output">Your recent pattern:</span> <span class="highlight">STRATEGIST</span>
+<span class="output">Bash acceptance:</span>     <span class="highlight">54%</span> <span class="output">← THE discriminator</span>
+<span class="output">Sophistication:</span>       <span class="highlight">0.50</span>
+<span class="output">Caution:</span>              <span class="highlight">0.80</span>
+
+<span class="output">You are the suzerain. The AI executes, but you rule.</span>
+        </pre>
+      </div>
+
+      <!-- Editorial -->
+      <div class="layout-demo layout-editorial">
+        <span class="layout-name">Editorial / Magazine</span>
+        <div class="col-left">
+          <p class="pull-quote">"The suzerain rules even where there are other kings. There is no territory outside his claim."</p>
+          <p class="attribution">— Blood Meridian</p>
+        </div>
+        <div class="divider"></div>
+        <div class="col-right">
+          <p class="body-text">When you use AI coding tools, you are the suzerain. The AI proposes; you dispose. The AI generates; you accept or reject. Every approval is an exercise of your claim. Every rejection is a boundary of your territory. Suzerain analyzes how you rule.</p>
+        </div>
+      </div>
+
+      <!-- Stacked Bands -->
+      <div class="layout-demo layout-stacked">
+        <span class="layout-name">Vertical Bands / Stacked</span>
+        <div class="band band-dark">
+          <h3>What kind of ruler are you?</h3>
+        </div>
+        <div class="band band-accent">
+          <p class="metric">54%</p>
+          <p>Bash acceptance rate — THE discriminator</p>
+        </div>
+        <div class="band band-mid">
+          <h3>Six Archetypes</h3>
+          <p>Delegator · Autocrat · Strategist · Deliberator · Council · Constitutionalist</p>
+        </div>
+        <div class="band band-dark">
+          <p>pip install suzerain</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== FULL MOCKUP ==================== -->
+  <section class="catalog-section">
+    <h2>04 / Full Mockup — Recommended Direction</h2>
+    <div class="mockup-preview">
+      <nav class="mockup-nav">
+        <div class="mockup-logo">SUZERAIN</div>
+        <div class="mockup-nav-links">
+          <span>DOCS</span>
+          <span>GITHUB</span>
+          <span>PYPI</span>
+        </div>
+      </nav>
+      <div class="mockup-hero">
+        <div class="mockup-hero-left">
+          <div class="eyebrow">From Blood Meridian</div>
+          <div class="dialogue">
+            <div class="line">
+              <div class="speaker">—</div>
+              <div class="speech">What's a suzerain?</div>
+            </div>
+            <div class="line">
+              <div class="speaker">—</div>
+              <div class="speech">A keeper. A keeper or overlord.</div>
+            </div>
+            <div class="line">
+              <div class="speaker">—</div>
+              <div class="speech">Why not say keeper then?</div>
+            </div>
+            <div class="line">
+              <div class="speaker">—</div>
+              <div class="speech">Because he is a special kind of keeper. A suzerain rules even where there are other kings. His authority countermands local judgements.</div>
+            </div>
+          </div>
+          <div class="hook">You are the suzerain. The AI executes, but you rule.</div>
+        </div>
+        <div class="mockup-hero-right">
+          <div class="install">INSTALL</div>
+          <div class="cmd">
+            <span class="prompt">$</span> <span class="text">pip install suzerain</span>
+          </div>
+          <div class="install">THEN</div>
+          <div class="cmd">
+            <span class="prompt">$</span> <span class="text">suzerain analyze</span>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <span>version</span>
+              <span class="stat-value">0.3.0</span>
+            </div>
+            <div class="stat">
+              <span>dependencies</span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat">
+              <span>data shared</span>
+              <span class="stat-value">opt-in only</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>

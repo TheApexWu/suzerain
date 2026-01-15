@@ -24,6 +24,24 @@
 
 ---
 
+## How the Analysis Works
+
+There's no NLP or LLM involved. Suzerain reads your Claude Code logs and counts things.
+
+**What it parses:** `~/.claude/projects/{project}/{session}.jsonl`
+
+Each log file contains tool_use (Claude's request) and tool_result (your response) events. The parser pairs these up and extracts:
+
+1. **Tool name** - Bash, Read, Edit, etc.
+2. **Accepted or rejected** - Did tool_result contain an error?
+3. **Decision time** - Gap between tool_use timestamp and tool_result timestamp
+
+That's it. No prompt analysis. No code inspection. Just event pairs and timestamps.
+
+**Script:** [`src/suzerain/parser.py`](../src/suzerain/parser.py)
+
+---
+
 ## What We Did
 
 ### Phase 1: Single-User Analysis (n=1)
@@ -45,6 +63,8 @@ Parsed 62 Claude Code sessions from one user (the author):
 
 **Implication:** Governance happens at the Bash prompt. Everything else is rubber-stamped.
 
+**Script:** [`src/suzerain/parser.py`](../src/suzerain/parser.py)
+
 ### Phase 2: Feature Exploration
 
 Searched for subtle features that might discriminate:
@@ -57,16 +77,61 @@ Searched for subtle features that might discriminate:
 | Parallel tools | 99.9% single | **No** - too rare |
 | Tool sequences | Bash-dominated | **No** |
 
+**Script:** [`src/suzerain/classifier.py`](../src/suzerain/classifier.py) - see `compute_subtle_features()`
+
 ### Phase 3: Simulated Validation
 
-Created 11 user personas based on realistic archetypes:
-- **Casual:** Junior dev, hobbyist, Copilot refugee
-- **Power:** Senior SWE, staff engineer, DevOps, data scientist
-- **Cautious:** Security engineer, compliance reviewer, paranoid senior
+**Honesty check: this part is vibes.**
 
-Generated 240 synthetic sessions (18,810 tool calls) and tested classification.
+I had n=1 real data (myself). To test if the classification logic worked at all, I made up 11 fake users based on people I've worked with or imagined. No surveys, no interviews, no research. Just "what would a security engineer probably do?" type reasoning.
 
-**Result:** Features discriminate as expected.
+The personas are stereotypes. They might be wrong. But they gave me something to test against.
+
+#### The 11 Personas
+
+**Casual Users (high trust, low sophistication)**
+
+| Persona | Bash Accept | Agents | Session Depth | Rationale |
+|---------|-------------|--------|---------------|-----------|
+| Junior Dev | 95% | No | ~15 calls | New to AI tools, trusts everything, short sessions |
+| Hobbyist | 98% | No | ~8 calls | Side projects, quick questions, doesn't overthink |
+| Copilot Refugee | 85% | No | ~25 calls | Learning Claude Code, slightly more careful |
+
+**Power Users (sophisticated, mixed trust)**
+
+| Persona | Bash Accept | Agents | Session Depth | Rationale |
+|---------|-------------|--------|---------------|-----------|
+| Senior SWE | 70% | Yes (15%) | ~150 calls | Experienced, uses agents, moderate caution |
+| Staff Engineer | 65% | Yes (25%) | ~250 calls | Orchestrates complex tasks, heavy agent usage |
+| DevOps/SRE | 80% | Yes (10%) | ~80 calls | Operational mindset, fast but not reckless |
+| Data Scientist | 75% | Yes (8%) | ~60 calls | Exploration-heavy, notebooks, moderate care |
+
+**Cautious Users (low trust, varying sophistication)**
+
+| Persona | Bash Accept | Agents | Session Depth | Rationale |
+|---------|-------------|--------|---------------|-----------|
+| Security Engineer | 30% | No | ~40 calls | Reviews everything, slow, paranoid about shell |
+| Compliance Reviewer | 40% | No | ~30 calls | Reads a lot, rarely writes, very selective |
+| Paranoid Senior | 25% | Yes (5%) | ~100 calls | Experienced but distrustful, rejects most Bash |
+| Prod On-Call | 50% | Yes (12%) | ~70 calls | Context-dependent, cautious in prod, fast in dev |
+
+#### How the Simulation Works
+
+For each persona, I defined:
+- `bash_acceptance`: probability of accepting Bash commands (THE key variable)
+- `high_risk_acceptance`: probability for Write/Edit
+- `low_risk_acceptance`: probability for Read/Glob/etc (usually 100%)
+- `uses_agents`: whether they use Task tool
+- `mean_session_depth`: typical number of tool calls per session
+- `tool_diversity`: how many different tools they use
+
+Then generated synthetic sessions: random tool sequences weighted by persona, with acceptance/rejection determined by the probabilities above.
+
+**240 sessions, 18,810 tool calls total.**
+
+#### Results
+
+Features discriminate as expected. The made-up personas cluster where I thought they would.
 
 | User Type | Sophistication | Caution | Agent Rate |
 |-----------|---------------|---------|------------|
@@ -74,154 +139,42 @@ Generated 240 synthetic sessions (18,810 tool calls) and tested classification.
 | Power | 0.89 | 0.47 | 22% |
 | Cautious | 0.69 | 1.00 | 7% |
 
----
+**What this proves:** The classification logic works on fake data that was designed to fit the classification logic. Circular, I know.
 
-## What We Don't Know
+**What this doesn't prove:** That real users actually behave this way, or that the archetypes mean anything outside my head.
 
-### Unknown #1: External Validity
-Our simulations are based on assumptions about how different users behave. These assumptions may be wrong. We need real data from diverse users to validate.
-
-### Unknown #2: Stability
-Is "governance style" stable across time and contexts? Our n=1 data covers 24 days on one project type. We don't know if behavior changes:
-- By project (greenfield vs production)
-- By time of day (morning focus vs evening tired)
-- By stakes (personal project vs work)
-
-### Unknown #3: Causation
-We observe correlations between features and user types. We don't know:
-- Does experience cause different behavior, or personality?
-- Does tool usage shape governance, or governance shape usage?
-- Are there confounding factors we're missing?
-
-### Unknown #4: Archetype Reality
-The 6 archetypes (Delegator, Autocrat, Strategist, etc.) are narrative constructs. The data suggests 3-4 real clusters. The mapping from clusters to archetypes is interpretive, not empirical.
+**Script:** [`scripts/simulate_users.py`](../scripts/simulate_users.py)
 
 ---
 
-## Limitations
+## Limitations (short version)
 
-### Limitation 1: Sampling Bias
-Early adopters of a tool that analyzes AI usage are not representative of:
-- General developers
-- Non-developers who use AI tools
-- Users who distrust AI analysis tools (ironic selection bias)
-
-### Limitation 2: Measurement Validity
-We measure:
-- Tool acceptance/rejection
-- Decision timing
-- Tool sequences
-
-We don't measure:
-- Intent behind decisions
-- Quality of outcomes
-- Counterfactual (what would have happened with different governance)
-
-### Limitation 3: Claude Code Specific
-Our analysis only works with Claude Code logs. Findings may not generalize to:
-- Cursor
-- GitHub Copilot
-- Other AI coding tools
-
-### Limitation 4: Privacy-Utility Tradeoff
-To protect privacy, we don't collect:
-- Actual prompts
-- File contents
-- Specific commands
-
-This limits our ability to understand context-dependent behavior.
+- **N=1 real data** - Everything else is simulated
+- **Simulations are vibes** - Personas are stereotypes I made up
+- **Thresholds are guesses** - No ablation study, no sensitivity analysis
+- **Claude Code only** - Won't work with Cursor, Copilot, etc.
+- **No intent measurement** - I see what you did, not why you did it
+- **Stability unknown** - Might be different on different days/projects
 
 ---
 
-## The Data We Collect (Opt-In Only)
+## Data Sharing (Opt-In)
 
-If you choose to share, we collect **only aggregate metrics**:
+Run `suzerain share --preview` to see exactly what would be shared. It's aggregate metrics only: acceptance rates, decision times, tool diversity. No prompts, no code, no file paths.
 
-```json
-{
-  "user_id": "anonymous_hash",
-  "collected_at": "2025-01-12T00:00:00Z",
-
-  "summary": {
-    "sessions_analyzed": 62,
-    "total_tool_calls": 5939,
-    "data_days": 24
-  },
-
-  "governance_features": {
-    "bash_acceptance_rate": 0.505,
-    "overall_acceptance_rate": 0.769,
-    "high_risk_acceptance": 0.639,
-    "low_risk_acceptance": 1.0,
-    "mean_decision_time_ms": 8068,
-    "snap_judgment_rate": 0.633
-  },
-
-  "sophistication_features": {
-    "agent_spawn_rate": 0.086,
-    "tool_diversity": 3.7,
-    "mean_session_depth": 94,
-    "power_session_ratio": 0.213,
-    "surgical_ratio": 0.45,
-    "edit_intensity": 0.166
-  },
-
-  "classification": {
-    "primary_pattern": "Power User (Cautious)",
-    "sophistication_score": 0.75,
-    "caution_score": 0.80,
-    "archetype": "Strategist"
-  }
-}
-```
-
-### What We DON'T Collect
-- Prompts or conversations
-- File paths or names
-- Command contents
-- Code snippets
-- Project names
-- Timestamps (only duration)
-- IP addresses (anonymized at collection)
+**Script:** [`src/suzerain/cli.py`](../src/suzerain/cli.py) - see `preview_share()`
 
 ---
 
-## How to Verify
+## Scripts Reference
 
-All code is open source:
-- `scripts/parse_claude_logs.py` — Log parsing
-- `scripts/simulate_users.py` — Simulation
-- `scripts/test_classification.py` — Validation
-
-You can:
-1. Run locally without sharing anything
-2. Inspect exactly what would be shared before opting in
-3. Audit the collection endpoint code
-
----
-
-## Research Questions
-
-With sufficient data, we want to answer:
-
-1. **How many real clusters exist?** (Is it 3? 6? Continuous?)
-2. **What predicts archetype?** (Role? Experience? Personality?)
-3. **Does governance style change over time?**
-4. **Are there optimal styles for different contexts?**
-5. **Can we provide useful recommendations?**
-
----
-
-## How to Participate
-
-```bash
-pip install suzerain
-suzerain analyze          # See your profile locally
-suzerain share --preview  # See what would be shared
-suzerain share --confirm  # Opt-in to share
-```
-
-Your participation helps build a real dataset for understanding human-AI governance patterns. No individual data is ever published — only aggregates.
+| Script | What it does |
+|--------|--------------|
+| [`src/suzerain/parser.py`](../src/suzerain/parser.py) | Parses Claude Code logs |
+| [`src/suzerain/classifier.py`](../src/suzerain/classifier.py) | Computes features and classifies |
+| [`src/suzerain/insights.py`](../src/suzerain/insights.py) | Maps archetypes to bottlenecks |
+| [`scripts/simulate_users.py`](../scripts/simulate_users.py) | Generates fake user data |
+| [`scripts/test_classification.py`](../scripts/test_classification.py) | Validates classification |
 
 ---
 
