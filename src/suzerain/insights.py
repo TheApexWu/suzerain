@@ -27,11 +27,42 @@ class ArchetypeInsight:
     historical_parallel: str
 
 
-# ============================================================================
-# Archetype Definitions
-# ============================================================================
-
 ARCHETYPES: Dict[str, ArchetypeInsight] = {
+
+    "Adaptive": ArchetypeInsight(
+        name="Adaptive",
+
+        language_game="The Context Game",
+        game_description=(
+            "You govern differently depending on context. Maintenance project? Trust flows freely. "
+            "Critical build? Every command scrutinized. Same AI, same you, different rules. "
+            "Your governance adapts to stakes."
+        ),
+
+        bottleneck="Context-switching overhead",
+        bottleneck_description=(
+            "Your adaptability is powerful but requires constant recalibration. The bottleneck is "
+            "the mental overhead of maintaining different trust levels for different contexts. "
+            "Each project switch costs cognitive load."
+        ),
+
+        mechanism=(
+            "High variance score (>0.3) = different acceptance rates across projects/sessions. "
+            "This is sophisticated governance—you've learned that context matters. The cost is "
+            "having to remember which rules apply where."
+        ),
+
+        recommendations=[
+            "Codify your context rules explicitly in per-project CLAUDE.md files",
+            "Use project-specific permission settings in Claude Code",
+            "Consider whether your low-trust contexts are actually higher risk, or just feel that way",
+            "Your adaptability is a strength—document it so others can learn from it",
+        ],
+
+        risk="Context confusion—applying low-trust rules when high-trust would be more efficient",
+
+        historical_parallel="Akbar the Great: one Mughal throne, different laws for each faith",
+    ),
 
     "Delegator": ArchetypeInsight(
         name="Delegator",
@@ -64,41 +95,42 @@ ARCHETYPES: Dict[str, ArchetypeInsight] = {
 
         risk="A single unreviewed command can undo hours of work",
 
-        historical_parallel="Mongol Horde: trust the generals, move fast, accept losses",
+        historical_parallel="Cyrus the Great: let satraps rule, but the empire is mine",
     ),
 
-    "Autocrat": ArchetypeInsight(
-        name="Autocrat",
+    "Guardian": ArchetypeInsight(
+        name="Guardian",
 
-        language_game="The Review Game",
+        language_game="The Protection Game",
         game_description=(
-            "You read everything but approve everything. You rule through witnessed "
-            "consent—you must see the command, understand it, then accept it. "
-            "The ritual matters even when the outcome is predetermined."
+            "You protect the gates. Every command is reviewed carefully before execution. "
+            "Minimal AI authority—you're the final arbiter of what runs. Security and "
+            "control over velocity."
         ),
 
-        bottleneck="Review time without filtering",
+        bottleneck="Throughput limited by review",
         bottleneck_description=(
-            "You spend time reviewing suggestions you'll accept anyway. The bottleneck is "
-            "attention spent on low-risk operations. Your review is thorough but not selective."
+            "Your careful review of everything limits how much you can accomplish. The bottleneck "
+            "is pure velocity—your protective approach trades speed for safety. This is "
+            "appropriate for high-stakes environments, expensive otherwise."
         ),
 
         mechanism=(
-            "High acceptance (>85%) + slow decisions (>2s) = reviewing but not filtering. "
-            "You're paying the cost of review without the benefit of rejection. This is "
-            "cognitive overhead without risk reduction."
+            "Low bash_acceptance (<50%) + low sophistication = protective oversight. "
+            "You don't delegate much to AI, and you don't let it execute freely. This works "
+            "when errors are costly. It's expensive when they're cheap."
         ),
 
         recommendations=[
-            "Identify which tool types actually need review (hint: usually just Bash)",
-            "Auto-approve Read/Glob/Grep—they're side-effect free",
-            "Focus review energy on commands with side effects",
-            "Set up allow-lists for common safe patterns",
+            "Identify truly safe operations and fast-track them",
+            "Use AI for exploration, then manually execute critical commands",
+            "Your caution is valuable for high-stakes work—own it",
+            "Consider auto-approving read-only operations to gain velocity",
         ],
 
-        risk="Review fatigue leads to rubber-stamping when it matters most",
+        risk="Overcaution becomes a bottleneck; velocity drops below usefulness",
 
-        historical_parallel="Roman Emperor: sees all petitions, grants almost all",
+        historical_parallel="Ming Dynasty: the Great Wall exists because the Emperor commands it",
     ),
 
     "Strategist": ArchetypeInsight(
@@ -136,41 +168,6 @@ ARCHETYPES: Dict[str, ArchetypeInsight] = {
         historical_parallel="Napoleon: trusts competent marshals, micromanages key battles",
     ),
 
-    "Deliberator": ArchetypeInsight(
-        name="Deliberator",
-
-        language_game="The Consideration Game",
-        game_description=(
-            "Every suggestion is a proposal requiring thought. You rule through "
-            "deliberation—nothing passes without due consideration. Speed is "
-            "sacrificed for confidence."
-        ),
-
-        bottleneck="Decision latency on all operations",
-        bottleneck_description=(
-            "You take time on everything, even safe operations. The bottleneck is pure "
-            "throughput—your careful approach limits how much you can accomplish in a "
-            "session. Quality is high but quantity suffers."
-        ),
-
-        mechanism=(
-            "Slow decisions (>5s mean) regardless of tool type = deliberative processing. "
-            "This might indicate uncertainty, learning, or genuine caution. It might also "
-            "indicate distraction or multitasking."
-        ),
-
-        recommendations=[
-            "Identify your 'always safe' operations and fast-track them",
-            "Use AI for exploration in dedicated sessions, then batch approvals",
-            "If slow due to context-switching, dedicate focused time to AI work",
-            "Your thoroughness is valuable—apply it selectively to high-stakes decisions",
-        ],
-
-        risk="Deliberation becomes procrastination; velocity drops below usefulness",
-
-        historical_parallel="Athenian Assembly: thorough debate, slow action",
-    ),
-
     "Council": ArchetypeInsight(
         name="Council",
 
@@ -202,7 +199,7 @@ ARCHETYPES: Dict[str, ArchetypeInsight] = {
 
         risk="Complexity becomes its own bottleneck; losing track of agent states",
 
-        historical_parallel="Venetian Republic: distributed decision-making, complex coordination",
+        historical_parallel="Ottoman Sultan: viziers execute, but the Sublime Porte decides",
     ),
 
     "Constitutionalist": ArchetypeInsight(
@@ -237,14 +234,10 @@ ARCHETYPES: Dict[str, ArchetypeInsight] = {
 
         risk="Habits optimized for past contexts may not fit new ones",
 
-        historical_parallel="Constitutional systems: stable rules, slow to adapt",
+        historical_parallel="Hammurabi: the code is the code, carved in stone for all",
     ),
 }
 
-
-# ============================================================================
-# Insight Generation
-# ============================================================================
 
 def get_archetype_insight(classification: Classification) -> ArchetypeInsight:
     """Get full insight for the classified archetype."""
@@ -285,10 +278,6 @@ def generate_insight_summary(classification: Classification) -> Dict:
     }
 
 
-# ============================================================================
-# Pattern-Specific Insights (beyond archetype)
-# ============================================================================
-
 def get_pattern_insight(classification: Classification) -> Dict:
     """Get insight based on the empirical pattern, not just archetype."""
     pattern = classification.primary_pattern
@@ -303,9 +292,8 @@ def get_pattern_insight(classification: Classification) -> Dict:
     }
 
     bash_rate = features.get("bash_acceptance_rate", 1.0)
-    snap_rate = features.get("snap_judgment_rate", 0.5)
-    sophistication = subtle.get("sophistication_score", 0)
-    caution = subtle.get("caution_score", 0)
+    sophistication = features.get("sophistication", 0)
+    variance = features.get("variance", 0)
 
     if "Power User" in pattern and "Cautious" in pattern:
         insights["key_observation"] = (
@@ -351,7 +339,7 @@ def get_pattern_insight(classification: Classification) -> Dict:
 
     else:  # Casual (Trusting)
         insights["key_observation"] = (
-            f"You accept {bash_rate:.0%} of Bash commands, decide quickly ({snap_rate:.0%} under 500ms). "
+            f"You accept {bash_rate:.0%} of Bash commands with straightforward usage. "
             f"Classic fast iteration pattern."
         )
         insights["what_it_means"] = (
@@ -376,7 +364,8 @@ def get_prompting_approaches(classification: Classification) -> Dict:
     subtle = classification.subtle_features
 
     bash_rate = features.get("bash_acceptance_rate", 1.0)
-    snap_rate = features.get("snap_judgment_rate", 0.5)
+    sophistication = features.get("sophistication", 0)
+    variance = features.get("variance", 0)
     agent_rate = subtle.get("agent_spawn_rate", 0)
 
     approaches = {
