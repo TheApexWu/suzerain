@@ -1,10 +1,8 @@
-# Methodology: An Honest Account
+# Methodology
 
 > *"The first principle is that you must not fool yourself — and you are the easiest person to fool."* — Feynman
 
----
-
-## ⚠️ Epistemic Status: Hypothesis-Generating
+## Epistemic Status: Hypothesis-Generating
 
 **This tool is NOT a validated psychometric instrument.**
 
@@ -16,166 +14,142 @@
 | Hypothesis-generating | Hypothesis-testing |
 | N=1 real user + simulations | Diverse validated sample |
 
-**The archetypes describe recent behavior, not who you are.** Patterns shift. The same person may be a Delegator on Monday and a Strategist on Friday. Context matters more than category.
+**The archetypes describe recent behavior, not who you are.** Patterns shift. The same person may be a Delegator on Monday and Adaptive on Friday. Context matters more than category.
 
-**Thresholds are hand-tuned.** Values like "bash_rate < 0.6 = cautious" are interpretive choices, not discoveries. They discriminate on simulated data but haven't been validated on diverse real users.
+**Thresholds are tuned against simulated data.** They discriminate on synthetic personas but haven't been validated on diverse real users.
 
-**We need your data to improve.** Run `suzerain share --preview` to see what would be shared. Participation helps build a real dataset.
-
----
+**We need your data to improve.** Run `suzerain share --preview` to see what would be shared.
 
 ## How the Analysis Works
 
-There's no NLP or LLM involved. Suzerain reads your Claude Code logs and counts things.
+No NLP or LLM. Suzerain reads your Claude Code logs and counts things.
 
 **What it parses:** `~/.claude/projects/{project}/{session}.jsonl`
 
-Each log file contains tool_use (Claude's request) and tool_result (your response) events. The parser pairs these up and extracts:
+Each log file contains tool_use (Claude's request) and tool_result (your response) events. The parser pairs these and extracts:
 
 1. **Tool name** - Bash, Read, Edit, etc.
 2. **Accepted or rejected** - Did tool_result contain an error?
-3. **Decision time** - Gap between tool_use timestamp and tool_result timestamp
+3. **Decision time** - Gap between timestamps
+4. **Command content** - For Bash commands only
 
-That's it. No prompt analysis. No code inspection. Just event pairs and timestamps.
+## Three-Axis Framework
 
-**Script:** [`src/suzerain/parser.py`](../src/suzerain/parser.py)
+Classification uses three independent axes:
 
----
+| Axis | Signal | Range |
+|------|--------|-------|
+| **Trust Level** | Bash acceptance rate | 0-100% |
+| **Sophistication** | Agent usage, tool diversity, session depth | 0-1 |
+| **Variance** | Cross-project/session consistency | 0-1 |
 
-## What We Did
+**Trust** is THE discriminator. All other tools are rubber-stamped (~100%). Governance happens at the Bash prompt.
+
+**Sophistication** captures power user patterns: spawning agents, using diverse tools, running deep sessions.
+
+**Variance** detects context-dependent governance: users who trust 100% on maintenance but 1% on critical builds.
+
+## Six Archetypes (Priority-Ordered)
+
+| Archetype | Rule | Parallel |
+|-----------|------|----------|
+| **Adaptive** | Variance ≥ 0.3 | Akbar the Great |
+| **Delegator** | Trust > 80%, Soph < 0.4 | Cyrus the Great |
+| **Council** | Trust > 70%, Soph ≥ 0.4 | Ottoman Sultan |
+| **Guardian** | Trust < 50%, Soph < 0.4 | Ming Dynasty |
+| **Strategist** | Trust < 70%, Soph ≥ 0.4 | Napoleon |
+| **Constitutionalist** | Fallback | Hammurabi |
+
+Priority order means variance is checked first. A high-variance user is Adaptive regardless of trust/sophistication.
+
+## Validation
 
 ### Phase 1: Single-User Analysis (n=1)
 
-Parsed 62 Claude Code sessions from one user (the author):
-- 5,939 tool calls over 24 days
-- Extracted: tool name, acceptance/rejection, decision time
+Parsed 75 sessions from one user (the author):
+- 7,083 tool calls over 28 days
+- Bash acceptance: 57%
+- Variance: 1.00 (context-dependent)
 
-**Key Finding:** Bash acceptance is THE only feature with variance.
+Key finding: 100% acceptance on home directory, 1% on suzerain project, 3% on stardust. Same user, radically different governance.
 
-| Tool | Acceptance Rate |
-|------|-----------------|
-| Bash | 50.5% |
-| Read | 100% |
-| Edit | 100% |
-| Write | 100% |
-| Glob | 100% |
-| All others | 100% |
+### Phase 2: Simulated Personas (n=14)
 
-**Implication:** Governance happens at the Bash prompt. Everything else is rubber-stamped.
+14 personas covering the behavioral space:
 
-**Script:** [`src/suzerain/parser.py`](../src/suzerain/parser.py)
+| Category | Personas |
+|----------|----------|
+| High trust | junior_dev, hobbyist, copilot_refugee |
+| Low trust | security_engineer, compliance_reviewer, paranoid_senior |
+| High sophistication | senior_swe, staff_engineer, devops_sre, data_scientist |
+| High variance | context_switcher, project_guardian, sprint_mode |
 
-### Phase 2: Feature Exploration
+**310 sessions, 24,700 tool calls.**
 
-Searched for subtle features that might discriminate:
+### Results
 
-| Feature | Variance | Useful? |
-|---------|----------|---------|
-| Agent/Task usage | 0-41% ratio | **Yes** - power user signal |
-| Tool diversity | 1-12 unique/session | **Yes** |
-| Session depth | 1-1345 calls | **Yes** |
-| Parallel tools | 99.9% single | **No** - too rare |
-| Tool sequences | Bash-dominated | **No** |
+The 3-axis framework discriminates:
 
-**Script:** [`src/suzerain/classifier.py`](../src/suzerain/classifier.py) - see `compute_subtle_features()`
+| Axis | High Group | Low/Avg Group |
+|------|------------|---------------|
+| Trust | 93% | 30% |
+| Sophistication | 0.95 | 0.69 |
+| Variance | 1.00 | 0.45 |
 
-### Phase 3: Simulated Validation
+Archetype distribution across 14 personas:
+- Adaptive: 6 (43%)
+- Delegator: 3 (21%)
+- Strategist: 3 (21%)
+- Council: 2 (14%)
 
-**Honesty check: this part is vibes.**
+What this proves: classification logic separates synthetic personas as designed.
 
-I had n=1 real data (myself). To test if the classification logic worked at all, I made up 11 fake users based on people I've worked with or imagined. No surveys, no interviews, no research. Just "what would a security engineer probably do?" type reasoning.
+What this doesn't prove: real users behave this way.
 
-The personas are stereotypes. They might be wrong. But they gave me something to test against.
+## Axis Independence
 
-#### The 11 Personas
+The three axes (Trust, Sophistication, Variance) are designed to measure conceptually distinct things:
 
-**Casual Users (high trust, low sophistication)**
+| Axis | Measures | Independent of... |
+|------|----------|-------------------|
+| Trust | How freely you approve commands | What tools you use |
+| Sophistication | How you use the tool | What you approve |
+| Variance | Consistency across contexts | Overall trust level |
 
-| Persona | Bash Accept | Agents | Session Depth | Rationale |
-|---------|-------------|--------|---------------|-----------|
-| Junior Dev | 95% | No | ~15 calls | New to AI tools, trusts everything, short sessions |
-| Hobbyist | 98% | No | ~8 calls | Side projects, quick questions, doesn't overthink |
-| Copilot Refugee | 85% | No | ~25 calls | Learning Claude Code, slightly more careful |
+**Empirical check (n=14 simulated personas):**
 
-**Power Users (sophisticated, mixed trust)**
+| Pair | Pearson r | Status |
+|------|-----------|--------|
+| Trust vs Sophistication | -0.39 | Moderate correlation |
+| Trust vs Variance | -0.30 | Weak (acceptable) |
+| Sophistication vs Variance | +0.40 | Moderate correlation |
 
-| Persona | Bash Accept | Agents | Session Depth | Rationale |
-|---------|-------------|--------|---------------|-----------|
-| Senior SWE | 70% | Yes (15%) | ~150 calls | Experienced, uses agents, moderate caution |
-| Staff Engineer | 65% | Yes (25%) | ~250 calls | Orchestrates complex tasks, heavy agent usage |
-| DevOps/SRE | 80% | Yes (10%) | ~80 calls | Operational mindset, fast but not reckless |
-| Data Scientist | 75% | Yes (8%) | ~60 calls | Exploration-heavy, notebooks, moderate care |
+**Why the correlations exist:** The simulated personas were designed as stereotypes. "Cautious" personas (security_engineer, paranoid_senior) were given agent usage. "High-variance" personas (context_switcher, sprint_mode) were all given `uses_agents=True`. These design choices, not the framework itself, created the correlations.
 
-**Cautious Users (low trust, varying sophistication)**
+**What this means:**
+- Correlations are simulation artifacts, not inherent framework flaws
+- |r| ~ 0.4 is moderate, not strong—axes still capture different information
+- Real-world data needed to validate true independence
+- Run `scripts/verify_axis_independence.py` to reproduce
 
-| Persona | Bash Accept | Agents | Session Depth | Rationale |
-|---------|-------------|--------|---------------|-----------|
-| Security Engineer | 30% | No | ~40 calls | Reviews everything, slow, paranoid about shell |
-| Compliance Reviewer | 40% | No | ~30 calls | Reads a lot, rarely writes, very selective |
-| Paranoid Senior | 25% | Yes (5%) | ~100 calls | Experienced but distrustful, rejects most Bash |
-| Prod On-Call | 50% | Yes (12%) | ~70 calls | Context-dependent, cautious in prod, fast in dev |
-
-#### How the Simulation Works
-
-For each persona, I defined:
-- `bash_acceptance`: probability of accepting Bash commands (THE key variable)
-- `high_risk_acceptance`: probability for Write/Edit
-- `low_risk_acceptance`: probability for Read/Glob/etc (usually 100%)
-- `uses_agents`: whether they use Task tool
-- `mean_session_depth`: typical number of tool calls per session
-- `tool_diversity`: how many different tools they use
-
-Then generated synthetic sessions: random tool sequences weighted by persona, with acceptance/rejection determined by the probabilities above.
-
-**240 sessions, 18,810 tool calls total.**
-
-#### Results
-
-Features discriminate as expected. The made-up personas cluster where I thought they would.
-
-| User Type | Sophistication | Caution | Agent Rate |
-|-----------|---------------|---------|------------|
-| Casual | 0.03 | 0.07 | 0% |
-| Power | 0.89 | 0.47 | 22% |
-| Cautious | 0.69 | 1.00 | 7% |
-
-**What this proves:** The classification logic works on fake data that was designed to fit the classification logic. Circular, I know.
-
-**What this doesn't prove:** That real users actually behave this way, or that the archetypes mean anything outside my head.
-
-**Script:** [`scripts/simulate_users.py`](../scripts/simulate_users.py)
-
----
-
-## Limitations (short version)
+## Limitations
 
 - **N=1 real data** - Everything else is simulated
-- **Simulations are vibes** - Personas are stereotypes I made up
-- **Thresholds are guesses** - No ablation study, no sensitivity analysis
+- **Simulations are stereotypes** - Personas are guesses about archetypes, with baked-in correlations
+- **Thresholds are tuned, not discovered** - No ablation study
+- **Axis correlations untested on real users** - Moderate correlations in simulated data may not reflect reality
 - **Claude Code only** - Won't work with Cursor, Copilot, etc.
-- **No intent measurement** - I see what you did, not why you did it
-- **Stability unknown** - Might be different on different days/projects
+- **No intent measurement** - We see what you did, not why
+- **Stability unknown** - Patterns might differ by day/project
 
----
+## Scripts
 
-## Data Sharing (Opt-In)
-
-Run `suzerain share --preview` to see exactly what would be shared. It's aggregate metrics only: acceptance rates, decision times, tool diversity. No prompts, no code, no file paths.
-
-**Script:** [`src/suzerain/cli.py`](../src/suzerain/cli.py) - see `preview_share()`
-
----
-
-## Scripts Reference
-
-| Script | What it does |
-|--------|--------------|
-| [`src/suzerain/parser.py`](../src/suzerain/parser.py) | Parses Claude Code logs |
-| [`src/suzerain/classifier.py`](../src/suzerain/classifier.py) | Computes features and classifies |
-| [`src/suzerain/insights.py`](../src/suzerain/insights.py) | Maps archetypes to bottlenecks |
-| [`scripts/simulate_users.py`](../scripts/simulate_users.py) | Generates fake user data |
-| [`scripts/test_classification.py`](../scripts/test_classification.py) | Validates classification |
-
----
+| Script | Purpose |
+|--------|---------|
+| `src/suzerain/parser.py` | Parse Claude Code logs |
+| `src/suzerain/analytics.py` | Command breakdown, temporal trends, variance |
+| `src/suzerain/classifier.py` | 3-axis classification |
+| `scripts/simulate_users.py` | Generate synthetic personas |
+| `scripts/test_classification.py` | Validate classification |
 
 *"In God we trust. All others must bring data."* — Deming

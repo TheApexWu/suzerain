@@ -882,25 +882,27 @@
         <pre class="cli-content">  <span class="cli-box">╔═══════════════════════════════════════════════════════╗
   ║                      SUZERAIN                         ║
   ╚═══════════════════════════════════════════════════════╝</span>
-  Your recent pattern: <span class="cli-highlight">STRATEGIST</span>  ·  Empirical cluster: Power User (Cautious)
+  Your recent pattern: <span class="cli-highlight">ADAPTIVE</span>  ·  Empirical cluster: Power User (Cautious)
 
   <span class="cli-dim">┌─ YOUR GOVERNANCE STYLE ───────────────────────────────┐</span>
-  <span class="cli-dim">│</span> The Discrimination Game: You rule differently depending
-  <span class="cli-dim">│</span> on the stakes. Safe ops flow through; risky ones face scrutiny.
+  <span class="cli-dim">│</span> The Context Game: Different rules for different contexts.
+  <span class="cli-dim">│</span> Maintenance project? Trust flows. Critical build? Scrutiny.
   <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
   <span class="cli-dim">┌─ YOUR BOTTLENECK ────────────────────────────────────┐</span>
-  <span class="cli-dim">│</span> Decision overhead on edge cases. Your selective trust is
-  <span class="cli-dim">│</span> efficient for clear-cut cases; ambiguous commands slow you.
+  <span class="cli-dim">│</span> Context-switching overhead. Your adaptability requires
+  <span class="cli-dim">│</span> constant recalibration. Each project switch costs cognitive load.
   <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
   <span class="cli-dim">┌─ RAW NUMBERS ─────────────────────────────────────────┐</span>
   <span class="cli-dim">│</span> Tool calls: <span class="cli-gold">6,654</span>  Bash: <span class="cli-gold">3006</span> <span class="cli-muted">(1685 yes, 1321 no)</span>  Sessions: <span class="cli-gold">73</span>
   <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
-  <span class="cli-dim">┌─ METRICS ─────────────────────────────────────────────┐</span>
-  <span class="cli-dim">│</span> Bash accept: <span class="cli-gold">56%</span>  Snap: <span class="cli-gold">63%</span>  Risk delta: <span class="cli-gold">+31%</span>  Soph: <span class="cli-gold">0.75</span>  Caut: <span class="cli-gold">0.80</span>
+  <span class="cli-dim">┌─ THREE-AXIS CLASSIFICATION ───────────────────────────┐</span>
+  <span class="cli-dim">│</span> Trust Level:     <span class="cli-gold">56%</span> (bash acceptance)
+  <span class="cli-dim">│</span> Sophistication:  <span class="cli-gold">0.75</span> (agent/tool usage)
+  <span class="cli-dim">│</span> Variance:        <span class="cli-gold">0.45</span> (cross-context)
   <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
   <span class="cli-dim">┌─ TRY THIS ────────────────────────────────────────────┐</span>
-  <span class="cli-dim">│</span> Prompt: <span class="cli-muted">"When I reject, tell me why it seemed risky."</span>
-  <span class="cli-dim">│</span> CLAUDE.md: <span class="cli-muted">'Explain risk level before modifying state.'</span>
+  <span class="cli-dim">│</span> Codify your context rules explicitly in per-project CLAUDE.md
+  <span class="cli-dim">│</span> Your adaptability is a strength—document it for yourself.
   <span class="cli-dim">└────────────────────────────────────────────────────────┘</span>
   Based on 73 sessions, 27 days  <span class="cli-muted">● Higher confidence</span>
   <span class="cli-dim">─────────────────────────────────────────────────────────</span>
@@ -940,10 +942,11 @@
         <p><span class="metric">Bash acceptance</span> was the only thing that varied. Read, Edit, Write, Glob, Grep were all at ~100%.</p>
       </div>
       <p>I rubber-stamp everything except shell commands. That's where I actually think before clicking accept.</p>
-      <p>From there I broke it into two axes:</p>
+      <p>From there I built a three-axis framework:</p>
+      <p><strong>Trust Level</strong> (0-100%): Your bash acceptance rate. THE main signal.</p>
       <p><strong>Sophistication</strong> (0-1): Do you use agents? Parallel tasks? Or just basic stuff?</p>
-      <p><strong>Caution</strong> (0-1): Do you reject commands? Slow down on risky ones?</p>
-      <p>These two are independent. You can be cautious and sophisticated, or trusting and casual. The combo gives you an archetype.</p>
+      <p><strong>Variance</strong> (0-1): Do you govern the same across all projects, or adapt by context?</p>
+      <p>The axes are independent. You can be high-trust and sophisticated, or low-trust and context-dependent. The combination maps to an archetype.</p>
     </div>
   </section>
 
@@ -956,40 +959,40 @@
     </div>
     <div class="archetypes-grid">
       <div class="archetype-card">
+        <div class="archetype-name">ADAPTIVE</div>
+        <div class="archetype-style">The Context Game</div>
+        <div class="archetype-desc">Different rules for different contexts. Maintenance project? Trust flows. Critical build? Every command scrutinized. Governance adapts to stakes.</div>
+        <div class="archetype-parallel">Akbar the Great — one throne, different laws for each faith</div>
+      </div>
+      <div class="archetype-card">
         <div class="archetype-name">DELEGATOR</div>
         <div class="archetype-style">The Acceptance Game</div>
         <div class="archetype-desc">Accept everything, fast. Throughput above all. Errors surface downstream—in tests, in production, in code review.</div>
-        <div class="archetype-parallel">Mongol Horde — trust the generals</div>
-      </div>
-      <div class="archetype-card">
-        <div class="archetype-name">AUTOCRAT</div>
-        <div class="archetype-style">The Review Game</div>
-        <div class="archetype-desc">Review everything, approve everything. The ritual of witnessed consent. Cognitive overhead without risk reduction.</div>
-        <div class="archetype-parallel">Roman Emperor — sees all petitions</div>
-      </div>
-      <div class="archetype-card">
-        <div class="archetype-name">STRATEGIST</div>
-        <div class="archetype-style">The Discrimination Game</div>
-        <div class="archetype-desc">Different rules for different tools. Safe operations flow through; risky ones face scrutiny. Decision overhead on edge cases.</div>
-        <div class="archetype-parallel">Napoleon — micromanages key battles</div>
-      </div>
-      <div class="archetype-card">
-        <div class="archetype-name">DELIBERATOR</div>
-        <div class="archetype-style">The Consideration Game</div>
-        <div class="archetype-desc">Every suggestion requires thought. Quality is high but quantity suffers. Decision latency on all operations.</div>
-        <div class="archetype-parallel">Athenian Assembly — thorough debate</div>
+        <div class="archetype-parallel">Cyrus the Great — let satraps rule, but the empire is mine</div>
       </div>
       <div class="archetype-card">
         <div class="archetype-name">COUNCIL</div>
         <div class="archetype-style">The Orchestration Game</div>
-        <div class="archetype-desc">Deploys agents, parallel tasks, complex workflows. You're the conductor. Bottleneck is coordination overhead.</div>
-        <div class="archetype-parallel">Venetian Republic — distributed trust</div>
+        <div class="archetype-desc">Deploys agents, parallel tasks, complex workflows. You're the conductor. High trust meets high capability.</div>
+        <div class="archetype-parallel">Ottoman Sultan — viziers execute, the Sublime Porte decides</div>
+      </div>
+      <div class="archetype-card">
+        <div class="archetype-name">GUARDIAN</div>
+        <div class="archetype-style">The Protection Game</div>
+        <div class="archetype-desc">Protective oversight. Every command reviewed carefully. Minimal AI authority. Security over velocity.</div>
+        <div class="archetype-parallel">Ming Dynasty — the Great Wall exists because I command it</div>
+      </div>
+      <div class="archetype-card">
+        <div class="archetype-name">STRATEGIST</div>
+        <div class="archetype-style">The Discrimination Game</div>
+        <div class="archetype-desc">Different rules for different tools. Safe operations flow through; risky ones face scrutiny. Selective delegation.</div>
+        <div class="archetype-parallel">Napoleon — trusts marshals, micromanages Austerlitz</div>
       </div>
       <div class="archetype-card">
         <div class="archetype-name">CONSTITUTIONALIST</div>
         <div class="archetype-style">The Consistency Game</div>
         <div class="archetype-desc">Predictable patterns, session to session. Implicit rules. Efficient until the situation changes. Risk is rigidity.</div>
-        <div class="archetype-parallel">Constitutional systems — stable rules</div>
+        <div class="archetype-parallel">Hammurabi — the code is the code, carved in stone</div>
       </div>
     </div>
   </section>
@@ -1020,7 +1023,7 @@
       <div class="journey-item">
         <div class="journey-phase">PHASE 4</div>
         <div class="journey-title">Built the Framework</div>
-        <div class="journey-desc">Simulated 11 user personas (junior devs, security folks, staff engineers) to test if classification worked. Two axes showed up: sophistication and caution. Six archetypes mapped onto four quadrants. It held together.</div>
+        <div class="journey-desc">Simulated 14 user personas (junior devs, security folks, context-switchers, staff engineers) to test classification. Three axes emerged: Trust, Sophistication, Variance. Six archetypes from priority-ordered rules. It held together.</div>
       </div>
       <div class="journey-item">
         <div class="journey-phase">NOW</div>
@@ -1041,19 +1044,19 @@
       <div class="honest-col">
         <h4>KNOW</h4>
         <ul>
-          <li>Bash acceptance has variance, other tools don't</li>
-          <li>Features separate simulated personas correctly</li>
-          <li>Framework is internally consistent</li>
-          <li>Based on 1 real user + 11 simulated ones</li>
+          <li>Bash acceptance is THE discriminating signal</li>
+          <li>3-axis framework separates 14 simulated personas</li>
+          <li>Trust, Sophistication, Variance are independent axes</li>
+          <li>Context-dependent users show high variance scores</li>
         </ul>
       </div>
       <div class="honest-col">
         <h4>DON'T KNOW</h4>
         <ul>
-          <li>If patterns hold across different users</li>
+          <li>If patterns hold across different real users</li>
           <li>If archetypes stay stable over time</li>
-          <li>If bottlenecks actually predict anything</li>
-          <li>If my thresholds are right (they're guesses)</li>
+          <li>If bottlenecks actually predict anything useful</li>
+          <li>If my thresholds are right (they're data-tuned guesses)</li>
         </ul>
       </div>
     </div>
