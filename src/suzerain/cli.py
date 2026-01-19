@@ -27,6 +27,7 @@ from .insights import (
     get_prompting_approaches,
     generate_insight_summary,
 )
+from .analytics import run_advanced_analytics
 
 
 OUTPUT_DIR = Path.home() / ".suzerain" / "analysis"
@@ -106,16 +107,16 @@ def print_profile_compact(profile, classification):
     print(f"  │ Mean decision time:   {profile.mean_decision_time_ms:.0f}ms")
     print("  └────────────────────────────────────────────────────────┘")
 
-    # Derived metrics
+    # Three-axis classification
     kf = classification.key_features
     sf = classification.subtle_features
     print()
-    print("  ┌─ DERIVED METRICS ─────────────────────────────────────┐")
-    print(f"  │ Bash acceptance:      {kf['bash_acceptance_rate']:.0%} ← the main signal")
-    print(f"  │ Snap judgments:       {kf['snap_judgment_rate']:.0%} (< 500ms)")
+    print("  ┌─ THREE-AXIS CLASSIFICATION ───────────────────────────┐")
+    print(f"  │ Trust Level:          {kf['bash_acceptance_rate']:.0%} (bash acceptance)")
+    print(f"  │ Sophistication:       {kf.get('sophistication', 0):.2f} (agent/tool usage)")
+    print(f"  │ Variance:             {kf.get('variance', 0):.2f} (cross-context)")
+    print(f"  │")
     print(f"  │ Risk delta:           {kf['risk_trust_delta']:+.0%} (safe vs risky gap)")
-    print(f"  │ Sophistication:       {sf.get('sophistication_score', 0):.2f}")
-    print(f"  │ Caution:              {sf.get('caution_score', 0):.2f}")
     print("  └────────────────────────────────────────────────────────┘")
 
     # Prompting approaches
@@ -204,6 +205,138 @@ def print_profile_compact(profile, classification):
     print()
 
 
+def print_advanced_analytics(analytics):
+    """Print advanced analytics: command breakdown, temporal trend, session arc."""
+
+    cb = analytics.command_breakdown
+    tt = analytics.temporal_trend
+    sa = analytics.session_arc
+
+    # Command Type Breakdown
+    print()
+    print("  ┌─ COMMAND BREAKDOWN ──────────────────────────────────────┐")
+
+    # Calculate rates
+    dest_total = cb.total('destructive')
+    state_total = cb.total('state_changing')
+    read_total = cb.total('read_only')
+    unk_total = cb.total('unknown')
+
+    dest_rate = cb.acceptance_rate('destructive')
+    state_rate = cb.acceptance_rate('state_changing')
+    read_rate = cb.acceptance_rate('read_only')
+
+    if dest_total > 0:
+        print(f"  │ Destructive:    {dest_rate:.0%} accepted ({dest_total} cmds)")
+    else:
+        print(f"  │ Destructive:    no data")
+
+    if state_total > 0:
+        print(f"  │ State-changing: {state_rate:.0%} accepted ({state_total} cmds)")
+    else:
+        print(f"  │ State-changing: no data")
+
+    if read_total > 0:
+        print(f"  │ Read-only:      {read_rate:.0%} accepted ({read_total} cmds)")
+    else:
+        print(f"  │ Read-only:      no data")
+
+    if unk_total > 0:
+        unk_rate = cb.acceptance_rate('unknown')
+        print(f"  │ Uncategorized:  {unk_rate:.0%} accepted ({unk_total} cmds)")
+
+    # Show insights
+    categorized_total = dest_total + state_total + read_total
+    categorized_accepted = (cb.destructive['accepted'] + cb.state_changing['accepted'] +
+                           cb.read_only['accepted'])
+    categorized_rate = categorized_accepted / categorized_total if categorized_total > 0 else 0
+
+    if unk_total > 0 and categorized_total > 0:
+        unk_rate = cb.acceptance_rate('unknown')
+        if unk_rate is not None and categorized_rate - unk_rate > 0.3:
+            print(f"  │")
+            print(f"  │ → KEY INSIGHT: You rubber-stamp recognizable commands")
+            print(f"  │   ({categorized_rate:.0%}) but scrutinize novel ones ({unk_rate:.0%}).")
+            print(f"  │   Your caution lives in the uncategorized.")
+
+    print("  └─────────────────────────────────────────────────────────┘")
+
+    # Temporal Trend
+    if tt.data_span_days >= 7 and len(tt.weekly_rates) >= 2:
+        print()
+        print("  ┌─ TEMPORAL TREND ─────────────────────────────────────────┐")
+        print(f"  │ Weekly bash acceptance over {tt.data_span_days} days:")
+        print(f"  │")
+
+        # Show each week's rate
+        rates = [r[1] for r in tt.weekly_rates]
+        min_rate = min(rates)
+        max_rate = max(rates)
+
+        for week_start, rate, count in tt.weekly_rates:
+            bar_len = int(rate * 20)
+            bar = "█" * bar_len + "░" * (20 - bar_len)
+            print(f"  │ {week_start[5:]}: {bar} {rate:.0%} ({count})")
+
+        # Show variance insight
+        if max_rate - min_rate > 0.3:
+            print(f"  │")
+            print(f"  │ → HIGH VARIANCE: {min_rate:.0%} to {max_rate:.0%}")
+            print(f"  │   Something changed in your trust pattern.")
+
+        print("  └─────────────────────────────────────────────────────────┘")
+
+    # Session Arc
+    if sa.sessions_analyzed >= 3:
+        print()
+        print("  ┌─ SESSION ARC ────────────────────────────────────────────┐")
+        print(f"  │ Comparing first {sa.n_commands} vs last {sa.n_commands} bash cmds per session:")
+        print(f"  │")
+
+        if sa.first_n_rate is not None and sa.last_n_rate is not None:
+            print(f"  │ First {sa.n_commands}: {sa.first_n_rate:.0%} accepted")
+            print(f"  │ Last {sa.n_commands}:  {sa.last_n_rate:.0%} accepted")
+            print(f"  │")
+
+            if sa.arc_type == 'warmup':
+                print(f"  │ → WARMUP pattern: you start cautious, loosen up")
+            elif sa.arc_type == 'cooldown':
+                print(f"  │ → COOLDOWN pattern: you start trusting, tighten up")
+            else:
+                print(f"  │ → FLAT: consistent trust throughout sessions")
+
+            print(f"  │   (based on {sa.sessions_analyzed} sessions)")
+
+        print("  └─────────────────────────────────────────────────────────┘")
+
+    # Trust Variance
+    tv = analytics.trust_variance
+    if tv.total_bash_commands >= 20 and len(tv.project_rates) >= 2:
+        print()
+        print("  ┌─ TRUST VARIANCE ─────────────────────────────────────────┐")
+        print(f"  │ Overall bash acceptance: {tv.overall_bash_rate:.0%}")
+        print(f"  │")
+        print(f"  │ By project:")
+
+        # Show top projects by command count
+        sorted_projects = sorted(tv.project_rates.items(), key=lambda x: -x[1][1])
+        for proj, (rate, count) in sorted_projects[:5]:
+            proj_short = proj[:40] + '...' if len(proj) > 40 else proj
+            print(f"  │   {rate:.0%} ({count:4d}) {proj_short}")
+
+        print(f"  │")
+        print(f"  │ Variance score: {tv.variance_score:.2f} ({tv.variance_type})")
+
+        if tv.variance_type == 'context_dependent':
+            print(f"  │ → You govern VERY differently by context")
+        elif tv.variance_type == 'moderate':
+            print(f"  │ → Some variation by context")
+        else:
+            print(f"  │ → Uniform policy across contexts")
+
+        print("  └─────────────────────────────────────────────────────────┘")
+
+
 def print_profile_verbose(profile, classification):
     """Print detailed governance profile with all metrics."""
     insight = get_archetype_insight(classification)
@@ -255,17 +388,18 @@ def print_profile_verbose(profile, classification):
     print(f"  Edit intensity:       {sf.get('edit_intensity', 0):.1%}")
     print()
 
-    # Classification
+    # Classification (3-axis framework)
     print("  ═══════════════════════════════════════════════════════")
-    print("  CLASSIFICATION")
+    print("  CLASSIFICATION (3-AXIS FRAMEWORK)")
     print("  ═══════════════════════════════════════════════════════")
     print(f"  Primary pattern:      {classification.primary_pattern}")
     print(f"  Pattern confidence:   {classification.pattern_confidence:.0%}")
     print(f"  Archetype:            {classification.archetype}")
     print(f"  Archetype confidence: {classification.archetype_confidence:.0%}")
     print()
-    print(f"  Sophistication score: {sf.get('sophistication_score', 0):.2f}")
-    print(f"  Caution score:        {sf.get('caution_score', 0):.2f}")
+    print(f"  Trust Level:          {classification.key_features.get('bash_acceptance_rate', 0):.2f}")
+    print(f"  Sophistication:       {classification.key_features.get('sophistication', 0):.2f}")
+    print(f"  Variance:             {classification.key_features.get('variance', 0):.2f}")
     print()
 
     # Archetype scores
@@ -402,8 +536,9 @@ def preview_share(profile, classification):
         "classification": {
             "pattern": classification.primary_pattern,
             "archetype": classification.archetype,
-            "sophistication_score": round(classification.subtle_features.get('sophistication_score', 0), 1),
-            "caution_score": round(classification.subtle_features.get('caution_score', 0), 1),
+            "trust_level": round(classification.key_features.get('bash_acceptance_rate', 0), 2),
+            "sophistication": round(classification.key_features.get('sophistication', 0), 2),
+            "variance": round(classification.key_features.get('variance', 0), 2),
         }
     }
 
@@ -449,6 +584,10 @@ def cmd_analyze(args):
         print_profile_verbose(profile, classification)
     else:
         print_profile_compact(profile, classification)
+
+    # Run and display advanced analytics
+    analytics = run_advanced_analytics(parser.all_events)
+    print_advanced_analytics(analytics)
 
     if args.export:
         export_data(profile, classification, parser)

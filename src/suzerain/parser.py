@@ -156,6 +156,11 @@ class ClaudeLogParser:
                                     if 0 < decision_time_ms < 300000:
                                         analysis.decision_times_ms.append(decision_time_ms)
 
+                                # Extract command for Bash
+                                command = None
+                                if tool_name == 'Bash':
+                                    command = pending['input'].get('command')
+
                                 tool_event = ToolEvent(
                                     session_id=session_id,
                                     timestamp=timestamp,
@@ -168,6 +173,7 @@ class ClaudeLogParser:
                                     response_timestamp=timestamp,
                                     decision_time_ms=decision_time_ms,
                                     project=project,
+                                    command=command,
                                 )
                                 self.all_events.append(tool_event)
 

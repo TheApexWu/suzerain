@@ -26,6 +26,9 @@ class ToolEvent:
     # Context
     project: Optional[str] = None
 
+    # Command content (for Bash)
+    command: Optional[str] = None
+
 
 @dataclass
 class SessionAnalysis:
