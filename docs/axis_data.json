@@ -1,0 +1,143 @@
+{
+  "personas": [
+    {
+      "name": "compliance_reviewer",
+      "trust": 0.3648148148148148,
+      "sophistication": 0.30000000000000004,
+      "variance": 0.44614940741428005,
+      "sessions": 40,
+      "tool_calls": 1158
+    },
+    {
+      "name": "context_switcher",
+      "trust": 0.496900826446281,
+      "sophistication": 1.0,
+      "variance": 1.0,
+      "sessions": 25,
+      "tool_calls": 2439
+    },
+    {
+      "name": "copilot_refugee",
+      "trust": 0.8537906137184116,
+      "sophistication": 0.1,
+      "variance": 0.26079517197902435,
+      "sessions": 40,
+      "tool_calls": 1017
+    },
+    {
+      "name": "data_scientist",
+      "trust": 0.7492260061919505,
+      "sophistication": 1.0,
+      "variance": 0.17791014453283566,
+      "sessions": 40,
+      "tool_calls": 2949
+    },
+    {
+      "name": "devops_sre",
+      "trust": 0.7976635514018692,
+      "sophistication": 0.8,
+      "variance": 0.15105358078703862,
+      "sessions": 60,
+      "tool_calls": 5107
+    },
+    {
+      "name": "hobbyist",
+      "trust": 0.9881889763779528,
+      "sophistication": 0.0,
+      "variance": 0.07210422341762807,
+      "sessions": 50,
+      "tool_calls": 435
+    },
+    {
+      "name": "junior_dev",
+      "trust": 0.9472477064220184,
+      "sophistication": 0.1,
+      "variance": 0.2639729778919389,
+      "sessions": 60,
+      "tool_calls": 837
+    },
+    {
+      "name": "paranoid_senior",
+      "trust": 0.2605886575735822,
+      "sophistication": 1.0,
+      "variance": 0.23006368036243063,
+      "sessions": 30,
+      "tool_calls": 3345
+    },
+    {
+      "name": "prod_oncall",
+      "trust": 0.5769569041336852,
+      "sophistication": 1.0,
+      "variance": 0.9901962092240058,
+      "sessions": 40,
+      "tool_calls": 2942
+    },
+    {
+      "name": "project_guardian",
+      "trust": 0.5987261146496815,
+      "sophistication": 0.8500000000000001,
+      "variance": 1.0,
+      "sessions": 20,
+      "tool_calls": 1132
+    },
+    {
+      "name": "security_engineer",
+      "trust": 0.28793774319066145,
+      "sophistication": 0.45,
+      "variance": 0.37288387379676957,
+      "sessions": 30,
+      "tool_calls": 1147
+    },
+    {
+      "name": "senior_swe",
+      "trust": 0.6972789115646258,
+      "sophistication": 1.0,
+      "variance": 0.24423084896163527,
+      "sessions": 50,
+      "tool_calls": 7873
+    },
+    {
+      "name": "sprint_mode",
+      "trust": 0.677797833935018,
+      "sophistication": 1.0,
+      "variance": 0.9896760217592755,
+      "sessions": 25,
+      "tool_calls": 2950
+    },
+    {
+      "name": "staff_engineer",
+      "trust": 0.6464616303374141,
+      "sophistication": 1.0,
+      "variance": 0.16836561503094172,
+      "sessions": 40,
+      "tool_calls": 10179
+    }
+  ],
+  "correlations": {
+    "Trust vs Sophistication": {
+      "pearson": -0.38891302100409586,
+      "spearman": -0.367032967032967,
+      "t_statistic": -1.462359218393596,
+      "p_value": 0.1435823159788412,
+      "strength": "moderate",
+      "independent": false
+    },
+    "Trust vs Variance": {
+      "pearson": -0.2985063953046252,
+      "spearman": -0.4901098901098901,
+      "t_statistic": -1.0834537038425305,
+      "p_value": 0.2785344982307576,
+      "strength": "weak",
+      "independent": true
+    },
+    "Sophistication vs Variance": {
+      "pearson": 0.3978647689076577,
+      "spearman": 0.11208791208791209,
+      "t_statistic": 1.5022648576668565,
+      "p_value": 0.13297015671938794,
+      "strength": "moderate",
+      "independent": false
+    }
+  },
+  "overall_independent": false
+}
