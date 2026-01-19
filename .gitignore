@@ -58,6 +58,12 @@ metrics.json
 .DS_Store
 Thumbs.db
 
+# GitHub Actions self-hosted runner
+actions-runner/
+
+# Internal docs (not for public repo)
+docs/LIVE_STATS.md
+
 # Porcupine keyword files (may contain license info)
 *.ppn
 .vercel

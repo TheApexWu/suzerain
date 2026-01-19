@@ -49,6 +49,8 @@ Classification uses three independent axes:
 
 **Variance** detects context-dependent governance: users who trust 100% on maintenance but 1% on critical builds.
 
+**Note on Variance:** Measured per-project, not per-session. This means variance only triggers for multi-project users with genuinely different governance styles across contexts. Most users may cluster at low variance (0.0-0.2). The "Adaptive" archetype is likely rare—that's fine. Per-session variance would yield more diversity but captures noise (mood, fatigue) rather than intentional governance.
+
 ## Six Archetypes (Priority-Ordered)
 
 | Archetype | Rule | Parallel |
