@@ -1,0 +1,11 @@
+{
+  "sessions": 78,
+  "tool_calls": 7571,
+  "archetype": "Adaptive",
+  "trust": 0.59,
+  "sophistication": 0.85,
+  "variance": 1.0,
+  "historical_parallel": "Akbar the Great: one Mughal throne, different laws for each faith",
+  "bottleneck": "Context-switching overhead",
+  "updated": "2026-01-19T02:07:13.456477+00:00"
+}

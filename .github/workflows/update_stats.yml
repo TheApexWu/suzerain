@@ -1,0 +1,27 @@
+name: Update Author Stats
+
+on:
+  schedule:
+    - cron: '0 5 * * 0'  # Every Sunday 12am EST (5am UTC)
+  workflow_dispatch:      # Manual trigger from GitHub UI
+
+jobs:
+  update-stats:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate stats from local Claude logs
+        run: |
+          cd ${{ github.workspace }}
+          python -m suzerain.cli analyze --export-json > site/data/author_stats.json
+
+      - name: Commit and push
+        run: |
+          git config user.name "suzerain-bot"
+          git config user.email "bot@suzerain.dev"
+          git add site/data/author_stats.json
+          git diff --staged --quiet || git commit -m "Update author stats [skip ci]"
+          git push

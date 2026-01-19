@@ -565,20 +565,43 @@ def preview_share(profile, classification):
 
 def cmd_analyze(args):
     """Run analysis command."""
-    print("\n  Analyzing Claude Code logs...")
+    # Suppress output if exporting JSON to stdout
+    quiet = getattr(args, 'export_json', False)
+
+    if not quiet:
+        print("\n  Analyzing Claude Code logs...")
 
     parser = ClaudeLogParser(project_filter=args.project)
     sessions = parser.parse_all_sessions()
 
     if not sessions:
-        print("\n  No sessions with tool calls found.")
-        print("  Make sure you have Claude Code logs at ~/.claude/projects/")
+        if not quiet:
+            print("\n  No sessions with tool calls found.")
+            print("  Make sure you have Claude Code logs at ~/.claude/projects/")
         return 1
 
-    print(f"  Found {len(sessions)} sessions with tool activity")
+    if not quiet:
+        print(f"  Found {len(sessions)} sessions with tool activity")
 
     profile = parser.compute_governance_profile()
     classification = classify_user(profile, parser)
+
+    # Export JSON to stdout (for GitHub Actions)
+    if quiet:
+        insight = get_archetype_insight(classification)
+        stats = {
+            "sessions": profile.sessions_analyzed,
+            "tool_calls": profile.total_tool_calls,
+            "archetype": classification.archetype,
+            "trust": round(classification.key_features["bash_acceptance_rate"], 2),
+            "sophistication": round(classification.key_features.get("sophistication", 0), 2),
+            "variance": round(classification.key_features.get("variance", 0), 2),
+            "historical_parallel": insight.historical_parallel,
+            "bottleneck": insight.bottleneck,
+            "updated": datetime.now(timezone.utc).isoformat()
+        }
+        print(json.dumps(stats, indent=2))
+        return 0
 
     if args.verbose:
         print_profile_verbose(profile, classification)
@@ -690,7 +713,8 @@ def main():
     analyze_parser = subparsers.add_parser('analyze', help='Analyze your Claude Code usage')
     analyze_parser.add_argument('--project', type=str, help='Filter by project name')
     analyze_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed metrics')
-    analyze_parser.add_argument('--export', action='store_true', help='Export to JSON')
+    analyze_parser.add_argument('--export', action='store_true', help='Export to JSON file')
+    analyze_parser.add_argument('--export-json', action='store_true', help='Output stats as JSON to stdout')
 
     # share command
     share_parser = subparsers.add_parser('share', help='Share anonymized metrics')

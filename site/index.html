@@ -792,6 +792,67 @@
         text-align: center;
       }
     }
+
+    /* Live Stats Dashboard */
+    .live-stats {
+      margin-top: 3rem;
+      padding: 2rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+    }
+    .stats-title {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #888;
+      margin-bottom: 1.5rem;
+    }
+    .stats-grid {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #666;
+    }
+    .stats-axes {
+      display: flex;
+      gap: 1.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 1rem;
+    }
+    .stats-axes strong {
+      color: #fff;
+    }
+    .stats-updated {
+      font-size: 0.75rem;
+      color: #555;
+    }
+    @media (max-width: 600px) {
+      .stats-grid {
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .stats-axes {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -937,7 +998,7 @@
     <div class="section-number">02</div>
     <h2 class="section-title">What I Found</h2>
     <div class="section-content">
-      <p>I looked at my own logs. 73 sessions, 6,654 tool calls. Pretty simple observation:</p>
+      <p>I looked at my own logs. Pretty simple observation:</p>
       <div class="finding-highlight">
         <p><span class="metric">Bash acceptance</span> was the only thing that varied. Read, Edit, Write, Glob, Grep were all at ~100%.</p>
       </div>
@@ -947,6 +1008,31 @@
       <p><strong>Sophistication</strong> (0-1): Do you use agents? Parallel tasks? Or just basic stuff?</p>
       <p><strong>Variance</strong> (0-1): Do you govern the same across all projects, or adapt by context?</p>
       <p>The axes are independent. You can be high-trust and sophisticated, or low-trust and context-dependent. The combination maps to an archetype.</p>
+    </div>
+
+    <!-- Live Stats Dashboard -->
+    <div id="author-stats" class="live-stats">
+      <h3 class="stats-title">My Live Stats</h3>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-value" id="stat-sessions">--</span>
+          <span class="stat-label">sessions</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-tools">--</span>
+          <span class="stat-label">tool calls</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-archetype">--</span>
+          <span class="stat-label">archetype</span>
+        </div>
+      </div>
+      <div class="stats-axes">
+        <span>Trust: <strong id="stat-trust">--</strong></span>
+        <span>Sophistication: <strong id="stat-soph">--</strong></span>
+        <span>Variance: <strong id="stat-var">--</strong></span>
+      </div>
+      <div class="stats-updated">Updated: <span id="stat-date">--</span></div>
     </div>
   </section>
 
@@ -1087,6 +1173,24 @@
     <div class="footer-meta">Built by Amadeus Woo · 2026</div>
     <div class="footer-meta"><a href="https://github.com/TheApexWu/suzerain">GitHub</a> · <a href="https://pypi.org/project/suzerain/">PyPI</a></div>
   </footer>
+
+  <!-- Live Stats Script -->
+  <script>
+    fetch('/data/author_stats.json')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('stat-sessions').textContent = d.sessions.toLocaleString();
+        document.getElementById('stat-tools').textContent = d.tool_calls.toLocaleString();
+        document.getElementById('stat-archetype').textContent = d.archetype.toUpperCase();
+        document.getElementById('stat-trust').textContent = (d.trust * 100).toFixed(0) + '%';
+        document.getElementById('stat-soph').textContent = d.sophistication.toFixed(2);
+        document.getElementById('stat-var').textContent = d.variance.toFixed(2);
+        document.getElementById('stat-date').textContent = new Date(d.updated).toLocaleDateString();
+      })
+      .catch(() => {
+        document.getElementById('author-stats').style.display = 'none';
+      });
+  </script>
 
 </body>
 </html>
