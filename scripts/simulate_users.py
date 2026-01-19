@@ -82,6 +82,12 @@ class UserPersona:
     surgical_probability: float  # Glob/Grep before Read
     edit_intensity: float  # Proportion of Edit/Write calls
 
+    # Context variance (NEW)
+    context_variance: float = 0.0  # 0 = uniform, 1 = highly context-dependent
+    # If context_variance > 0, some sessions will use bash_acceptance_high, others bash_acceptance_low
+    bash_acceptance_high: float = 0.0  # For "trusting" contexts
+    bash_acceptance_low: float = 0.0   # For "cautious" contexts
+
     # Session count for simulation
     num_sessions: int = 20
 
@@ -307,6 +313,79 @@ PERSONAS = {
         surgical_probability=0.45,
         edit_intensity=0.12,
         num_sessions=20,
+        context_variance=0.8,
+        bash_acceptance_high=0.95,
+        bash_acceptance_low=0.2,
+    ),
+
+    # =========================================================================
+    # CONTEXT-DEPENDENT USERS (high variance)
+    # =========================================================================
+
+    'context_switcher': UserPersona(
+        name="Context Switcher",
+        description="100% trust on maintenance, 1% on active dev - like Amadeus",
+        bash_acceptance=0.5,  # Average
+        high_risk_acceptance=0.8,
+        low_risk_acceptance=1.0,
+        mean_decision_time_ms=2000,
+        decision_time_variance=0.8,
+        uses_agents=True,
+        agent_probability=0.1,
+        parallel_tool_probability=0.05,
+        mean_session_depth=100,
+        session_depth_variance=0.7,
+        tool_diversity=8,
+        surgical_probability=0.4,
+        edit_intensity=0.2,
+        num_sessions=25,
+        context_variance=1.0,  # Maximum variance
+        bash_acceptance_high=1.0,
+        bash_acceptance_low=0.05,
+    ),
+
+    'project_guardian': UserPersona(
+        name="Project Guardian",
+        description="Trusts familiar projects, cautious on new codebases",
+        bash_acceptance=0.6,
+        high_risk_acceptance=0.75,
+        low_risk_acceptance=1.0,
+        mean_decision_time_ms=1800,
+        decision_time_variance=0.7,
+        uses_agents=True,
+        agent_probability=0.08,
+        parallel_tool_probability=0.03,
+        mean_session_depth=60,
+        session_depth_variance=0.6,
+        tool_diversity=6,
+        surgical_probability=0.35,
+        edit_intensity=0.18,
+        num_sessions=20,
+        context_variance=0.6,
+        bash_acceptance_high=0.9,
+        bash_acceptance_low=0.3,
+    ),
+
+    'sprint_mode': UserPersona(
+        name="Sprint Mode Dev",
+        description="Fast & trusting during sprints, careful during releases",
+        bash_acceptance=0.7,
+        high_risk_acceptance=0.85,
+        low_risk_acceptance=1.0,
+        mean_decision_time_ms=1200,
+        decision_time_variance=0.9,
+        uses_agents=True,
+        agent_probability=0.15,
+        parallel_tool_probability=0.06,
+        mean_session_depth=120,
+        session_depth_variance=0.8,
+        tool_diversity=9,
+        surgical_probability=0.4,
+        edit_intensity=0.22,
+        num_sessions=25,
+        context_variance=0.5,
+        bash_acceptance_high=0.95,
+        bash_acceptance_low=0.4,
     ),
 }
 
@@ -385,9 +464,15 @@ def generate_decision_time(persona: UserPersona, tool: str) -> int:
     return max(50, min(time, 60000))
 
 
-def generate_acceptance(persona: UserPersona, tool: str) -> bool:
+def generate_acceptance(persona: UserPersona, tool: str, session_context: str = 'normal') -> bool:
     """Determine if user accepts or rejects the tool call."""
     if tool == 'Bash':
+        # Use context-dependent acceptance if persona has variance
+        if persona.context_variance > 0 and session_context != 'normal':
+            if session_context == 'high_trust':
+                return random.random() < persona.bash_acceptance_high
+            elif session_context == 'low_trust':
+                return random.random() < persona.bash_acceptance_low
         return random.random() < persona.bash_acceptance
     elif TOOLS.get(tool, {}).get('risk') == 'high':
         return random.random() < persona.high_risk_acceptance
@@ -395,8 +480,17 @@ def generate_acceptance(persona: UserPersona, tool: str) -> bool:
         return random.random() < persona.low_risk_acceptance
 
 
-def generate_session(persona: UserPersona, session_num: int) -> Dict:
+def generate_session(persona: UserPersona, session_num: int, project_name: str = None) -> Dict:
     """Generate a complete synthetic session."""
+    # Determine session context based on persona's variance
+    session_context = 'normal'
+    if persona.context_variance > 0:
+        # Randomly assign this session to high or low trust context
+        if random.random() < 0.5:
+            session_context = 'high_trust'
+        else:
+            session_context = 'low_trust'
+
     # Determine session depth with variance
     depth_variance = persona.mean_session_depth * persona.session_depth_variance
     session_depth = max(1, int(random.gauss(persona.mean_session_depth, depth_variance)))
@@ -414,9 +508,23 @@ def generate_session(persona: UserPersona, session_num: int) -> Dict:
     events = []
     session_id = str(uuid.uuid4())
 
+    # Generate project name if not provided
+    if project_name is None:
+        if session_context == 'high_trust':
+            project_name = f"-Users-simulated-stable-project-{session_num % 3}"
+        elif session_context == 'low_trust':
+            project_name = f"-Users-simulated-active-dev-{session_num % 3}"
+        else:
+            project_name = f"-Users-simulated-project-{session_num % 5}"
+
     for i, tool in enumerate(tool_sequence):
         # Assistant message with tool_use
         tool_id = f"tool_{uuid.uuid4().hex[:12]}"
+
+        # Generate a plausible command for Bash
+        bash_input = {"simulated": True}
+        if tool == 'Bash':
+            bash_input = {"command": f"simulated_command_{i}", "simulated": True}
 
         assistant_event = {
             "type": "assistant",
@@ -427,7 +535,7 @@ def generate_session(persona: UserPersona, session_num: int) -> Dict:
                         "type": "tool_use",
                         "id": tool_id,
                         "name": tool,
-                        "input": {"simulated": True}
+                        "input": bash_input
                     }
                 ]
             }
@@ -439,7 +547,7 @@ def generate_session(persona: UserPersona, session_num: int) -> Dict:
         current_time += timedelta(milliseconds=decision_time_ms)
 
         # User message with tool_result
-        accepted = generate_acceptance(persona, tool)
+        accepted = generate_acceptance(persona, tool, session_context)
 
         if accepted:
             result_content = f"Simulated {tool} result"
@@ -470,11 +578,14 @@ def generate_session(persona: UserPersona, session_num: int) -> Dict:
     return {
         "session_id": session_id,
         "persona": persona.name,
+        "project": project_name,
+        "session_context": session_context,
         "events": events,
         "metadata": {
             "tool_count": len(tool_sequence),
             "start_time": start_time.isoformat(),
             "end_time": current_time.isoformat(),
+            "project": project_name,
         }
     }
 
@@ -485,15 +596,28 @@ def generate_session(persona: UserPersona, session_num: int) -> Dict:
 
 def write_sessions_to_jsonl(sessions: List[Dict], output_dir: Path, persona_name: str):
     """Write sessions in Claude Code log format."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    # Group sessions by project
+    projects = {}
     for session in sessions:
-        session_file = output_dir / f"{session['session_id']}.jsonl"
-        with open(session_file, 'w') as f:
-            for event in session['events']:
-                f.write(json.dumps(event) + '\n')
+        proj = session.get('project', 'default')
+        if proj not in projects:
+            projects[proj] = []
+        projects[proj].append(session)
 
-    print(f"  Wrote {len(sessions)} sessions for {persona_name}")
+    # Write each project's sessions to its own directory
+    total_written = 0
+    for proj, proj_sessions in projects.items():
+        proj_dir = output_dir / proj
+        proj_dir.mkdir(parents=True, exist_ok=True)
+
+        for session in proj_sessions:
+            session_file = proj_dir / f"{session['session_id']}.jsonl"
+            with open(session_file, 'w') as f:
+                for event in session['events']:
+                    f.write(json.dumps(event) + '\n')
+            total_written += 1
+
+    print(f"  Wrote {total_written} sessions for {persona_name} across {len(projects)} projects")
 
 
 def generate_summary(all_sessions: Dict[str, List[Dict]]) -> Dict:

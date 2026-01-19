@@ -60,3 +60,5 @@ Thumbs.db
 
 # Porcupine keyword files (may contain license info)
 *.ppn
+.vercel
+.env*.local
