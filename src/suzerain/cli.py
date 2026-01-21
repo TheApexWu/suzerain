@@ -526,7 +526,7 @@ def preview_share(profile, classification):
             "bash_acceptance_rate": round(classification.key_features['bash_acceptance_rate'], 2),
             "overall_acceptance_rate": round(profile.acceptance_rate, 2),
             "high_risk_acceptance": round(profile.high_risk_acceptance, 2),
-            "snap_judgment_rate": round(classification.key_features['snap_judgment_rate'], 2),
+            "snap_judgment_rate": round(classification.key_features.get('snap_judgment_rate', 0), 2),
         },
         "sophistication": {
             "agent_spawn_rate": round(classification.subtle_features.get('agent_spawn_rate', 0), 2),
