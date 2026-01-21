@@ -576,8 +576,15 @@ def cmd_analyze(args):
 
     if not sessions:
         if not quiet:
-            print("\n  No sessions with tool calls found.")
-            print("  Make sure you have Claude Code logs at ~/.claude/projects/")
+            print("\n  No sessions with tool calls found.\n")
+            print("  Suzerain reads Claude Code logs from ~/.claude/projects/")
+            print("")
+            print("  To generate logs:")
+            print("    1. Use Claude Code (claude) in any project")
+            print("    2. Accept or reject some tool calls")
+            print("    3. Run 'suzerain analyze' again")
+            print("")
+            print("  Logs appear after your first Claude Code session.")
         return 1
 
     if not quiet:
@@ -714,7 +721,7 @@ def main():
     analyze_parser.add_argument('--project', type=str, help='Filter by project name')
     analyze_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed metrics')
     analyze_parser.add_argument('--export', action='store_true', help='Export to JSON file')
-    analyze_parser.add_argument('--export-json', action='store_true', help='Output stats as JSON to stdout')
+    analyze_parser.add_argument('--export-json', '--json', action='store_true', help='Output stats as JSON to stdout')
 
     # share command
     share_parser = subparsers.add_parser('share', help='Share anonymized metrics')
